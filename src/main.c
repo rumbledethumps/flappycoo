@@ -56,7 +56,5 @@ int main(void)
         sound_update(events);
         if (events & EVENT_BEST)
             best_save();
-        if (events & EVENT_QUIT)
-            return 0;
     }
 }

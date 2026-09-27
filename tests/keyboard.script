@@ -1,5 +1,7 @@
-# Space starts a game, and P pauses and resumes it. The title screen
-# changes every frame, so expect-same passes only on a paused game.
+# Space starts a game, and P pauses it, resumes it and pauses it again. The
+# title screen changes every frame, and a stopped program leaves the console
+# cursor blinking every 30 frames, so an expect-same over exactly 30 frames
+# passes only on a paused game.
 run 30
 press space
 run 2
@@ -17,3 +19,10 @@ run 2
 release p
 run 5
 expect-changed
+press p
+run 2
+release p
+run 5
+mark
+run 30
+expect-same

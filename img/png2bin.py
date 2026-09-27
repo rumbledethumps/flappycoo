@@ -7,8 +7,9 @@ usage:
   png2bin.py bitmap <bpp> in.png pixels.bin palette.bin
   png2bin.py tiles <bpp> in.png tiles.bin map.bin palette.bin
 
-sprite  Mode 5 custom sprite images of width x height pixels, taken left to
-        right, then top to bottom. Each row starts on a byte boundary.
+sprite  Mode 5 custom sprite images of width x height pixels, each 4 to 64
+        in steps of 4, taken left to right, then top to bottom. Each row
+        starts on a byte boundary.
 bitmap  One mode 3 bitmap of the whole image.
 tiles   Mode 2 8x8 tiles with duplicates removed, all 8 rows of one tile
         stored before the next tile, and a map of one tile number per byte,
@@ -156,9 +157,12 @@ def main():
     kind, bpp = args[0], int(args[1])
     if kind == "sprite":
         size = args[2].split("x")
-        if len(size) != 2 or not all(s.isdigit() and int(s) for s in size):
+        if len(size) != 2 or not all(s.isdigit() for s in size):
             sys.exit(__doc__)
         frame_w, frame_h = int(size[0]), int(size[1])
+        if not all(4 <= s <= 64 and s % 4 == 0 for s in (frame_w, frame_h)):
+            sys.exit(f"{args[3]}: {frame_w}x{frame_h} frames are not 4 to 64 "
+                     "pixels in steps of 4")
         args = args[3:]
     else:
         args = args[2:]

@@ -224,8 +224,6 @@ uint8_t game_update(uint8_t buttons)
     pressed = buttons & ~game.held;
     game.held = buttons;
     events = 0;
-    if (pressed & BUTTON_QUIT)
-        return EVENT_QUIT;
     if (game.state == STATE_PLAY && (pressed & BUTTON_PAUSE))
         game.paused = !game.paused;
     if (game.paused)

@@ -1,7 +1,19 @@
-# A left click starts a game, and a right click pauses and resumes it. The
-# title screen changes every frame, so expect-same passes only on a paused
-# game.
+# A pointer that only hovers does not start a game, a left click does, and
+# a right click pauses it, resumes it and pauses it again. A right click on
+# the title screen does nothing, but it pauses a game that a hover started.
+# The title screen changes every frame, and a stopped program leaves the
+# console cursor blinking every 30 frames, so an expect-same over exactly 30
+# frames passes only on a paused game.
 run 30
+tablet at 160 120 0
+run 20
+tablet at 160 120 2
+run 2
+tablet at 160 120 0
+run 5
+mark
+run 30
+expect-changed
 tablet at 160 120 1
 run 2
 tablet at 160 120 0
@@ -18,3 +30,10 @@ run 2
 tablet at 160 120 0
 run 5
 expect-changed
+tablet at 160 120 2
+run 2
+tablet at 160 120 0
+run 5
+mark
+run 30
+expect-same

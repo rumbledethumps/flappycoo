@@ -119,10 +119,26 @@ jobs:
           path: ${{ steps.pick.outputs.name }}/
           if-no-files-found: error
 
+      # Runs for separate commits to main overlap, and each newly published
+      # release becomes Latest, so without this check a run for an older
+      # commit that ends last makes an older build Latest.
+      - name: Check that main is still at this commit
+        id: tip
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          tip=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$tip" = "$GITHUB_SHA" ]; then
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish the release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v3
         with:
+          make_latest: ${{ steps.tip.outputs.latest }}
           tag_name: build-${{ steps.pick.outputs.sha }}
           # Without this the tag is created on whatever the default branch
           # points at when the release is published, not on what was built.

@@ -188,8 +188,9 @@ UTEST(play, pipe_hit_falls_then_over)
     distance = game.distance;
     while (n < 200 && game.state == STATE_FALL)
     {
-        events = game_update(++n & 1 ? BUTTON_FLAP : 0);
+        events = game_update(++n & 1 ? BUTTON_FLAP | BUTTON_PAUSE : 0);
         ASSERT_FALSE(events & EVENT_FLAP);
+        ASSERT_FALSE(game.paused);
         ASSERT_TRUE(game.pipe_x[0] == COO_X && game.distance == distance);
     }
     EXPECT_EQ(events, EVENT_OVER | EVENT_BEST);
@@ -208,6 +209,18 @@ UTEST(play, pipe_collision)
     EXPECT_TRUE(probe(100, COO_X + COO_HIT_X + COO_HIT_W - 1, 0));
     EXPECT_FALSE(probe(100, COO_X + COO_HIT_X - PIPE_W, 0));
     EXPECT_TRUE(probe(100, COO_X + COO_HIT_X - PIPE_W + 1, 0));
+
+    // Only the position after the coo moves up 1 px is inside the top pipe.
+    game.state = STATE_PLAY;
+    game.world_sub = 0;
+    game.coo_y = 100 * 16;
+    game.coo_vy = -16 - COO_GRAVITY;
+    game.pipe_x[0] = 61;
+    game.pipe_gap[0] = 100 + COO_HIT_Y;
+    game.pipe_x[1] = 400;
+    game.pipe_x[2] = 544;
+    game_update(0);
+    EXPECT_EQ(game.state, STATE_FALL);
 }
 
 // Keeps the coo inside every gap for n frames and counts EVENT_SCORE.
@@ -254,8 +267,12 @@ UTEST(play, pause_freezes_everything)
     uint8_t n;
     game_t before;
     start_play(1);
+    // In the FLAP cycle the coo frame changes with time, not with vy.
     for (n = 0; n < 10; ++n)
+    {
+        hold_coo(100);
         game_update(0);
+    }
     EXPECT_EQ(game_update(BUTTON_PAUSE), 0);
     EXPECT_TRUE(game.paused);
     before = game;
@@ -263,6 +280,7 @@ UTEST(play, pause_freezes_everything)
         EXPECT_EQ(game_update(n & 1 ? BUTTON_FLAP : 0), 0);
     EXPECT_EQ(game.coo_y, before.coo_y);
     EXPECT_EQ(game.coo_frame, before.coo_frame);
+    EXPECT_EQ(game.anim_tick, before.anim_tick);
     EXPECT_EQ(game.distance, before.distance);
     EXPECT_EQ(game.pipe_x[0], before.pipe_x[0]);
     game_update(BUTTON_PAUSE);
@@ -314,22 +332,6 @@ UTEST(over, restart_delay)
     EXPECT_EQ(game.distance, distance);
     game_update(BUTTON_PAUSE);
     EXPECT_FALSE(game.paused);
-}
-
-UTEST(game, quit_in_every_state)
-{
-    game_init(1, 0);
-    EXPECT_EQ(game_update(BUTTON_QUIT), EVENT_QUIT);
-    game_update(BUTTON_FLAP);
-    EXPECT_EQ(game_update(BUTTON_QUIT), EVENT_QUIT);
-    game_update(BUTTON_PAUSE);
-    EXPECT_EQ(game_update(BUTTON_QUIT | BUTTON_PAUSE), EVENT_QUIT);
-    game_update(0);
-    game_update(BUTTON_PAUSE);
-    probe(100, 60, 0);
-    EXPECT_EQ(game_update(BUTTON_QUIT), EVENT_QUIT);
-    run_until_over();
-    EXPECT_EQ(game_update(BUTTON_QUIT), EVENT_QUIT);
 }
 
 UTEST(rng, deterministic)
@@ -416,6 +418,7 @@ UTEST(anim, frames_per_state)
     uint8_t n;
     uint8_t seen = 0;
     uint8_t last;
+    uint8_t changes;
     game_init(1, 0);
     for (n = 0; n < 64; ++n)
     {
@@ -436,13 +439,17 @@ UTEST(anim, frames_per_state)
     EXPECT_EQ(last, COO_FRAME_RISE);
 
     seen = 0;
+    changes = 0;
     for (n = 0; n < 7 * COO_ANIM_TICKS * 2; ++n)
     {
+        last = game.coo_frame;
         hold_coo(100);
         game_update(0);
         seen |= cycle_bit(COO_FRAME_FLAP, 7);
+        changes += game.coo_frame != last;
     }
     EXPECT_EQ(seen, 0x7F);
+    EXPECT_EQ(changes, 14);
 
     seen = 0;
     for (n = 0; n < 4 * COO_ANIM_TICKS * 2; ++n)

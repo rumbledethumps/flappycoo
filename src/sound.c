@@ -11,8 +11,6 @@
 #define HIT_CHANNEL (XRAM_PSG + offsetof(psg_t, channel[2]))
 #define MOO_CHANNEL (XRAM_PSG + offsetof(psg_t, channel[3]))
 
-#define PAN_GATE offsetof(psg_t, channel[0].pan_gate)
-
 // The flap rises and the moo falls by these Hz each frame.
 #define FLAP_RISE 40
 #define FLAP_FRAMES 6
@@ -52,7 +50,7 @@ static uint8_t moo_frames;
 
 static void gate_write(uint16_t channel, uint8_t gate)
 {
-    RIA.addr0 = channel + PAN_GATE;
+    RIA.addr0 = channel + offsetof(psg_t, channel[0].pan_gate);
     RIA.rw0 = gate;
 }
 

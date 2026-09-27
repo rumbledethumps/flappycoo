@@ -42,8 +42,6 @@ uint8_t input_read(void)
     if (KEYBOARD_PRESSED(keyboard.keys, HID_KEY_P) ||
         KEYBOARD_PRESSED(keyboard.keys, HID_KEY_ENTER))
         buttons |= BUTTON_PAUSE;
-    if (KEYBOARD_PRESSED(keyboard.keys, HID_KEY_ESCAPE))
-        buttons |= BUTTON_QUIT;
 
     // A mouse or a pen is contact 0, and each finger on a touchscreen is a
     // contact of its own.
@@ -63,7 +61,7 @@ uint8_t input_read(void)
     for (i = 0; i < GAMEPAD_PLAYERS; ++i)
     {
         xram0_read(&pad, addr, sizeof(pad));
-        addr += sizeof(gamepad_t) / GAMEPAD_PLAYERS;
+        addr += offsetof(gamepad_t, player[1]) - offsetof(gamepad_t, player[0]);
         if (!(pad.dpad & GAMEPAD_FEAT_CONNECTED))
             continue;
         if ((pad.dpad & GAMEPAD_DPAD_UP) ||

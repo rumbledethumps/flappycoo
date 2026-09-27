@@ -13,9 +13,8 @@ Flap through the gaps between the pipes. Each pipe passed scores a point.
 
 | Action | Keyboard | Mouse, pen or touchscreen | Gamepad |
 |---|---|---|---|
-| Flap, start | Space, Up or W | click or tap | A, B, X, Y or up |
-| Pause | P or Enter | right click | Start |
-| Quit | Escape | | |
+| Flap, start | Space | click or tap | A |
+| Pause | P | right click | Start |
 
 Flappy Coo needs version 0.34 or newer of the Picocomputer firmware or the
 emulator. Custom-size sprites and the `SAVE:` drive are new in 0.34.
@@ -27,7 +26,10 @@ emulator. Custom-size sprites and the `SAVE:` drive are new in 0.34.
  * Make or Ninja
  * [cc65 or llvm-mos](https://github.com/picocomputer?view_as=public).
    The unit-test ROM needs llvm-mos, so install both to run every test.
- * gcc or clang for your computer, to run the unit tests there.
+ * gcc for your computer, to run the unit tests there. On Windows, install
+   it with `winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT` and
+   open a new terminal. The `host` preset names gcc, because the llvm-mos
+   `bin` folder contains a clang that builds only 6502 programs.
 
 The install steps for Windows, macOS and Linux are in
 [RP6502-SDK](https://picocomputer.github.io/sdk.html#sdk-install), along with
@@ -52,15 +54,12 @@ On Windows and WSL the emulator is `tools/rp6502-emu.exe`. The first
 configure downloads the emulator into `tools/`, so a fresh clone needs a
 network connection once.
 
-| Release build | Program (bytes) | ROM (bytes) |
-|---|---|---|
-| cc65 | 6051 | 59713 |
-| llvm-mos | 10376 | 64144 |
-
-The rest of each ROM is the same image data and help text. Both builds
-pass the same tests and produce identical screenshots, so CI releases the
-smaller ROM, which today is the cc65 ROM. llvm-mos Release builds with `-O3`,
-which optimizes for speed rather than size.
+The two ROMs hold the same image data and help text and differ only in
+the program. Both pass the same emulator scripts and produce identical
+screenshots, so CI releases the smaller ROM, which today is the cc65 ROM.
+llvm-mos Release builds with `-O3`, which optimizes for speed rather than
+size. The sizes change with each code edit and compiler update, so they
+are not listed here. The job summary of each CI run lists both.
 
 ## Where each part is
 
@@ -75,7 +74,7 @@ which optimizes for speed rather than size.
 | Tile backgrounds | `img/sky.png`, `img/ground.png` | Tile maps that wrap. The sky scrolls at a quarter of the ground speed. |
 | Bitmap logo | `img/logo.png` | On the title screen. Otherwise it is moved off the canvas. |
 | Sound | `src/sound.c` | One PSG channel each for the flap, the score, a hit and the "moo" at game over. |
-| Input | `src/input.c` | The keyboard, the tablet and up to four gamepads are read into three buttons: flap, pause and quit. A mouse, a pen and each finger on a touchscreen are all contacts of the tablet device. |
+| Input | `src/input.c` | The keyboard, the tablet and up to four gamepads are read into two buttons: flap and pause. A mouse, a pen and each finger on a touchscreen are all contacts of the tablet device. |
 | Help | `src/help.txt` | Shown by HELP and INFO on a Picocomputer and in the ROM Help window of the emulator. |
 
 The device docs are [Keyboard](https://picocomputer.github.io/ria.html#ria-keyboard),
@@ -96,11 +95,14 @@ each plane's sprite layer is drawn over its fill layer.
 
 ## Images
 
-The build converts each PNG in `img/` with `img/png2bin.py`, which needs
-only Python 3. `rp6502_asset()` in `CMakeLists.txt` adds each output file
-to the ROM with an XRAM address, and the files are loaded into XRAM before
-the 6502 starts. The program has no loading code, and no image passes
-through 6502 RAM. [Adding Assets](https://picocomputer.github.io/sdk.html#sdk-assets)
+The build converts the PNGs in the table below with `img/png2bin.py`,
+which needs only Python 3. `CMakeLists.txt` holds one
+`add_custom_command()` per PNG, so a new PNG in `img/` is converted only
+after a command is added for it. `rp6502_asset()` adds each converted file
+that the game uses to the ROM with an XRAM address, and the files are
+loaded into XRAM before the 6502 starts. The program has no loading code,
+and no image passes through 6502 RAM.
+[Adding Assets](https://picocomputer.github.io/sdk.html#sdk-assets)
 explains `rp6502_asset()`.
 
 | Image | png2bin.py command | XRAM data |
@@ -108,28 +110,33 @@ explains `rp6502_asset()`.
 | `coo.png` | `sprite 8 52x36` | 18 sprite images, 256 colors |
 | `logo.png` | `bitmap 4` | a 160x82 bitmap, 16 colors |
 | `pipe_body.png` | `sprite 4 32x64` | one sprite image, 16 colors |
-| `pipe_cap.png` | `sprite 4 36x12` | one sprite image; the palette is the same as the body palette, so it is not loaded |
+| `pipe_cap.png` | `sprite 4 36x12` | one sprite image, drawn with the body palette. `pipe_cap.png` must have the same palette as `pipe_body.png`, and the cap palette is not loaded. |
 | `sky.png` | `tiles 4` | 237 tiles, a 64x27 map, 16 colors |
 | `ground.png` | `tiles 4` | 18 tiles, an 8x3 map, 16 colors |
 
 `concept.png` is the concept art that the coo frames and the logo were cut
 from. The build does not use it.
 
-Each PNG must be:
+Each converted PNG must be:
 
  * indexed color (a palette image), not interlaced, at 1, 2, 4 or 8 bits
    per pixel;
- * saved with exactly 2^bpp palette entries, 16 at 4 bpp or 256 at 8 bpp,
-   which is the size of its palette in `src/xram.h`;
+ * saved with at most 2^bpp palette entries, 16 at 4 bpp or 256 at 8 bpp,
+   which is the size of the matching palette in `src/xram.h`;
  * transparent at index 0, with alpha 0. An entry with alpha below 128
    becomes the color 0x0000, which the VGA draws as transparent;
- * a whole number of frames for `sprite`, or a multiple of 8 pixels with
-   at most 256 different tiles for `tiles`.
+ * a whole number of frames for `sprite`, each frame 4 to 64 pixels wide
+   and high in steps of 4, or a multiple of 8 pixels with at most 256
+   different tiles for `tiles`;
+ * for `sky.png` and `ground.png`, a power-of-two number of tiles wide (64
+   and 8 now), because the scroll positions wrap with a mask.
 
 The converter stops the build with a message when an image is not
 indexed, is interlaced, has more colors or tiles than fit, or is not a
-whole number of frames. Colors are RGB555, so the lowest 3 bits of each
-red, green and blue value are dropped. See
+whole number of frames, or when a sprite frame size is not 4 to 64 pixels
+in steps of 4. The compiler stops the build when `SKY_MAP_W` or
+`GROUND_MAP_W` in `src/xram.h` is not a power of two. Colors are RGB555,
+so the lowest 3 bits of each red, green and blue value are dropped. See
 [Colors, Palettes and Fonts](https://picocomputer.github.io/vga.html#colors-palettes-and-fonts).
 
 ## XRAM layout
@@ -160,10 +167,9 @@ The layout uses 54312 bytes and leaves 11224 free.
 
 | Test | What it checks | Presets |
 |---|---|---|
-| `host_tests` | The rules in `src/game.c`: 20 cases in `tests/test_game.c`, with [utest.h](https://github.com/sheredom/utest.h), including a bot that must pass 50 pipes. | `host` |
+| `host_tests` | The rules in `src/game.c`, tested by `tests/test_game.c` with [utest.h](https://github.com/sheredom/utest.h), including a bot that must pass 50 pipes. | `host` |
 | `unit_tests` | The same cases as a ROM, `tests.rp6502`, where `int` is 16 bits as it is in the game. | llvm-mos |
-| `boot` | The ROM starts, and Escape quits with exit code 0. | cc65, llvm-mos |
-| `keyboard`, `tablet`, `gamepad` | Each device starts a game, then pauses it, and the canvas stays still while paused. | cc65, llvm-mos |
+| `keyboard`, `tablet`, `gamepad` | Each device starts a game, pauses it, resumes it and pauses it again, and the canvas stays still while paused. A tablet pointer that only hovers does not start a game. | cc65, llvm-mos |
 | `screenshots` | Writes `title.png`, `play.png`, `paused.png` and `over.png` into the build directory. | cc65, llvm-mos |
 
 The host tests:
@@ -199,7 +205,9 @@ overlaps the soft stack" when the test ROM grows too large for RAM.
 runs the host tests, builds and tests cc65 Release and llvm-mos Release,
 and uploads the smaller `flappycoo.rp6502` with the screenshots from both
 builds as a workflow artifact. On `main`, it also publishes the ROM as a
-release tagged `build-<commit>`. The job summary lists both ROM sizes.
+release tagged `build-<commit>`, which becomes the Latest release only when
+`main` is still at that commit. The job summary lists both ROM sizes and
+which ROM was released, and the notes of each release give both sizes.
 
 ## Starting your own game
 
@@ -208,8 +216,8 @@ release tagged `build-<commit>`. The job summary lists both ROM sizes.
  * Rename `SAVE:flappycoo.hiscore` in `src/main.c`, so the scores of two
    games are in separate files.
  * Replace `src/help.txt`.
- * Replace the PNGs, then change the sizes in `src/xram.h` and
-   `src/game.h` to match.
+ * Replace the PNGs, then change the sizes in `src/xram.h`, `src/game.h`
+   and the png2bin commands in `CMakeLists.txt` to match.
 
 ## Updating the tools
 

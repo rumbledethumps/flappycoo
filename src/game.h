@@ -7,7 +7,6 @@
 // Buttons held this frame, for game_update
 #define BUTTON_FLAP 0x01
 #define BUTTON_PAUSE 0x02
-#define BUTTON_QUIT 0x04
 
 // Events returned by game_update
 #define EVENT_FLAP 0x01
@@ -15,7 +14,6 @@
 #define EVENT_HIT 0x04
 #define EVENT_OVER 0x08
 #define EVENT_BEST 0x10
-#define EVENT_QUIT 0x20
 
 // Values of game.state
 #define STATE_TITLE 0

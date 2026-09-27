@@ -339,7 +339,6 @@ typedef struct
 #define HID_KEY_P 0x13
 #define HID_KEY_W 0x1A
 #define HID_KEY_ENTER 0x28
-#define HID_KEY_ESCAPE 0x29
 #define HID_KEY_SPACE 0x2C
 #define HID_KEY_ARROW_UP 0x52
 
@@ -355,6 +354,12 @@ typedef struct
 #define GROUND_MAP_H 3
 #define TEXT_COLS 40
 #define TEXT_ROWS 27
+
+// video_draw wraps the scroll positions with a mask, and game.distance wraps
+// at 65536.
+_Static_assert((SKY_MAP_W & (SKY_MAP_W - 1)) == 0 &&
+                   (GROUND_MAP_W & (GROUND_MAP_W - 1)) == 0,
+               "The sky and ground map widths must be powers of two.");
 
 typedef MODE2_TILE(4, 8) tile_t;
 typedef MODE5_CUSTOM_IMAGE(8, COO_W, COO_H) coo_image_t;

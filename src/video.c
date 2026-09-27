@@ -2,13 +2,14 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include "game.h"
 #include "video.h"
 #include "xram.h"
 
 #define CANVAS_H 240
 
-#define LOGO_X 80
+#define LOGO_X ((CANVAS_W - LOGO_W) / 2)
 #define LOGO_Y 28
 
 #define PIPE_BODY_X ((PIPE_W - PIPE_BODY_W) / 2)
@@ -64,6 +65,7 @@ static const uint16_t tens[] = {10000, 1000, 100, 10};
 
 static uint16_t coo_images[COO_FRAME_COUNT];
 static char line[TEXT_COLS];
+static char cells[TEXT_COLS];
 static uint8_t line_length;
 static uint8_t shown_screen = SCREEN_NONE;
 static uint16_t shown_score;
@@ -84,7 +86,7 @@ static void sprite_move(uint16_t sprite, int16_t x, int16_t y)
     RIA.rw0 = y >> 8;
 }
 
-static void pipes_move(void)
+static void pipes_draw(void)
 {
     uint8_t i;
     uint16_t sprite = XRAM_PIPE_SPRITES;
@@ -135,7 +137,9 @@ static void put_number(uint16_t n)
 
 static void show_line(uint16_t row_addr)
 {
-    xram0_write(row_addr + ((TEXT_COLS - line_length) >> 1), line, line_length);
+    memset(cells, ' ', TEXT_COLS);
+    memcpy(cells + ((TEXT_COLS - line_length) >> 1), line, line_length);
+    xram0_write(row_addr, cells, TEXT_COLS);
     line_length = 0;
 }
 
@@ -155,6 +159,8 @@ static uint8_t screen(void)
     return game.paused ? SCREEN_PAUSED : SCREEN_PLAY;
 }
 
+// Every row that any screen uses is written whole on each screen change, so
+// no row is blank on the canvas between its old text and its new text.
 static void text_draw(void)
 {
     uint8_t now = screen();
@@ -165,46 +171,42 @@ static void text_draw(void)
         return;
     }
     shown_screen = now;
-    xram0_set(XRAM_TEXT, ' ', TEXT_ROWS * TEXT_COLS);
     if (now == SCREEN_TITLE)
     {
         put_text("BEST ");
         put_number(game.best);
         show_line(TEXT_ROW(1));
-        put_text("SPACE, CLICK OR A TO FLAP");
-        show_line(TEXT_ROW(18));
     }
     else if (now == SCREEN_PLAY || now == SCREEN_PAUSED)
-    {
         score_draw();
-        if (now == SCREEN_PAUSED)
-        {
-            put_text("PAUSED");
-            show_line(TEXT_ROW(6));
-        }
-    }
     else
-    {
+        show_line(TEXT_ROW(1));
+    if (now >= SCREEN_OVER)
         put_text("GAME OVER");
-        show_line(TEXT_ROW(4));
+    show_line(TEXT_ROW(4));
+    if (now == SCREEN_PAUSED)
+        put_text("PAUSED");
+    if (now >= SCREEN_OVER)
+    {
         put_text("SCORE ");
         put_number(game.score);
         put_text("   BEST ");
         put_number(game.best);
-        show_line(TEXT_ROW(6));
-        if (now == SCREEN_AGAIN)
-        {
-            put_text("SPACE, CLICK OR A TO PLAY");
-            show_line(TEXT_ROW(8));
-        }
     }
+    show_line(TEXT_ROW(6));
+    if (now == SCREEN_AGAIN)
+        put_text("SPACE, CLICK OR A TO PLAY");
+    show_line(TEXT_ROW(8));
+    if (now == SCREEN_TITLE)
+        put_text("SPACE, CLICK OR A TO FLAP");
+    show_line(TEXT_ROW(18));
 }
 
 // The positions are written first, in the blanking time after VSYNC, so no
 // layer or sprite moves partway through the drawing of the canvas.
 void video_draw(void)
 {
-    pipes_move();
+    pipes_draw();
     sprite_move(XRAM_COO_SPRITE, COO_X, game.coo_y >> 4);
     word_write(XRAM_COO_SPRITE + offsetof(mode5_csprite_t, xram_sprite_ptr),
                coo_images[game.coo_frame]);
@@ -230,6 +232,7 @@ void video_init(void)
     // XRAM starts out random, so every byte the modes read is written
     // before the modes are programmed.
     xram0_write(XRAM_TEXT_PALETTE, text_palette, sizeof(text_palette));
+    xram0_set(XRAM_TEXT, ' ', TEXT_ROWS * TEXT_COLS);
     xram0_write(XRAM_SKY_CONFIG, &sky_config, sizeof(sky_config));
     xram0_write(XRAM_LOGO_CONFIG, &logo_config, sizeof(logo_config));
     xram0_write(XRAM_TEXT_CONFIG, &text_config, sizeof(text_config));
