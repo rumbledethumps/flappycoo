@@ -12,8 +12,8 @@ permissions:
 
 concurrency:
   # The run for each commit to main is in a separate group. With one shared
-  # group, a third push cancels the second run while it waits, and that
-  # commit then gets no release and no failure. Pull request runs still
+  # group, a third push cancels the queued second run, so that commit is
+  # neither released nor reported as a failure. Pull request runs still
   # cancel older runs.
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -68,14 +68,15 @@ jobs:
           set -euo pipefail
           sha=$(git rev-parse --short HEAD)
           # The HEAD of a pull request is a merge commit that exists only in
-          # this run, so a pull request's files are named for the run.
+          # this run, so the files for a pull request are named with the run ID.
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
             name="flappycoo-${sha}"
           else
             name="flappycoo-${GITHUB_RUN_ID}"
           fi
-          # The program that rp6502_map() runs while CMake configures is also
-          # a .rp6502 file, so the ROMs are named by their exact paths.
+          # The program that rp6502_map() runs while CMake configures is
+          # also a .rp6502 file, so the ROM paths are written in full, not
+          # matched with a wildcard.
           cc65_rom=build/cc65/release/flappycoo.rp6502
           llvm_mos_rom=build/llvm-mos/release/flappycoo.rp6502
           cc65_size=$(stat -c %s "$cc65_rom")

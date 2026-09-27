@@ -337,10 +337,8 @@ typedef struct
 
 // The HID keycodes that the game reads
 #define HID_KEY_P 0x13
-#define HID_KEY_W 0x1A
 #define HID_KEY_ENTER 0x28
 #define HID_KEY_SPACE 0x2C
-#define HID_KEY_ARROW_UP 0x52
 
 // Sizes of the art in img/ and of the text layer
 #define LOGO_W 160
@@ -378,7 +376,7 @@ typedef struct
 // within one 1 KB span of XRAM never evict each other from it.
 _Static_assert(sizeof(palettes_t) <= 1024, "The palettes do not fit in 1 KB.");
 
-// The PSG is first, because its 64 bytes must not cross a 256-byte page.
+// The PSG is first, because the 64 PSG bytes must not cross a 256-byte page.
 typedef struct
 {
     psg_t psg;

@@ -36,15 +36,13 @@ uint8_t input_read(void)
 
     xram0_read(&keyboard, XRAM_KEYBOARD, sizeof(keyboard));
     if (KEYBOARD_PRESSED(keyboard.keys, HID_KEY_SPACE) ||
-        KEYBOARD_PRESSED(keyboard.keys, HID_KEY_ARROW_UP) ||
-        KEYBOARD_PRESSED(keyboard.keys, HID_KEY_W))
-        buttons |= BUTTON_FLAP;
-    if (KEYBOARD_PRESSED(keyboard.keys, HID_KEY_P) ||
         KEYBOARD_PRESSED(keyboard.keys, HID_KEY_ENTER))
+        buttons |= BUTTON_FLAP;
+    if (KEYBOARD_PRESSED(keyboard.keys, HID_KEY_P))
         buttons |= BUTTON_PAUSE;
 
     // A mouse or a pen is contact 0, and each finger on a touchscreen is a
-    // contact of its own.
+    // separate contact.
     RIA.addr0 = XRAM_TABLET + offsetof(tablet_t, contact[0].flags);
     RIA.step0 = offsetof(tablet_t, contact[1]) - offsetof(tablet_t, contact[0]);
     contact_flags = 0;
@@ -64,9 +62,8 @@ uint8_t input_read(void)
         addr += offsetof(gamepad_t, player[1]) - offsetof(gamepad_t, player[0]);
         if (!(pad.dpad & GAMEPAD_FEAT_CONNECTED))
             continue;
-        if ((pad.dpad & GAMEPAD_DPAD_UP) ||
-            (pad.btn0 & (GAMEPAD_BTN0_A | GAMEPAD_BTN0_B |
-                         GAMEPAD_BTN0_X | GAMEPAD_BTN0_Y)))
+        if (pad.btn0 & (GAMEPAD_BTN0_A | GAMEPAD_BTN0_B |
+                        GAMEPAD_BTN0_X | GAMEPAD_BTN0_Y))
             buttons |= BUTTON_FLAP;
         if (pad.btn1 & GAMEPAD_BTN1_START)
             buttons |= BUTTON_PAUSE;

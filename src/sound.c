@@ -17,7 +17,7 @@
 #define MOO_FALL 1
 #define MOO_FRAMES 45
 
-// The score steps up to its second note after SCORE_FRAMES.
+// The score sound steps up to the second note after SCORE_FRAMES.
 #define SCORE_HZ 1319
 #define SCORE_FRAMES 5
 
@@ -31,8 +31,9 @@ typedef struct
     uint8_t wave_release;
 } effect_t;
 
-// A sustain of 0xF_ in vol_decay is silent, so the flap, score and hit fade
-// out while their gates stay on. The moo sustains until its gate closes.
+// A sustain of 0xF_ in vol_decay is silent, so the flap, score and hit
+// fade out while the channel gates stay on. The moo sustains until the moo
+// gate closes.
 static const effect_t flap = {
     PSG_FREQ_HZ(330), 128, 0x20, 0xF4, PSG_WAVE_SQUARE | 0x02};
 static const effect_t score = {

@@ -47,7 +47,7 @@ static const mode2_config_t ground_config = {
 // Each pipe is four sprites: top body, top cap, bottom cap, bottom body.
 // Every row of the body image is the same, so the image drawn at double
 // height covers the longest pipe with half the XRAM.
-static const mode5_csprite_t pipe_sprites[4] = {
+static const mode5_csprite_t one_pipe[4] = {
     {0, 0, XRAM_PIPE_BODY, XRAM_PIPE_PALETTE,
      MODE5_SIZE(PIPE_BODY_W, PIPE_BODY_H), MODE5_4BPP | MODE5_VDOUBLE},
     {0, 0, XRAM_PIPE_CAP, XRAM_PIPE_PALETTE,
@@ -102,7 +102,7 @@ static void pipes_draw(void)
         sprite_move(sprite + sizeof(mode5_csprite_t) * 2, x, gap + PIPE_GAP);
         sprite_move(sprite + sizeof(mode5_csprite_t) * 3, x + PIPE_BODY_X,
                     gap + PIPE_GAP + PIPE_CAP_H);
-        sprite += sizeof(pipe_sprites);
+        sprite += sizeof(one_pipe);
     }
 }
 
@@ -159,8 +159,8 @@ static uint8_t screen(void)
     return game.paused ? SCREEN_PAUSED : SCREEN_PLAY;
 }
 
-// Every row that any screen uses is written whole on each screen change, so
-// no row is blank on the canvas between its old text and its new text.
+// Every row with text on any screen is written whole on each screen change,
+// so no row is blank on the canvas between the old text and the new text.
 static void text_draw(void)
 {
     uint8_t now = screen();
@@ -195,10 +195,10 @@ static void text_draw(void)
     }
     show_line(TEXT_ROW(6));
     if (now == SCREEN_AGAIN)
-        put_text("SPACE, CLICK OR A TO PLAY");
+        put_text("SPACE OR CLICK TO PLAY");
     show_line(TEXT_ROW(8));
     if (now == SCREEN_TITLE)
-        put_text("SPACE, CLICK OR A TO FLAP");
+        put_text("SPACE OR CLICK TO FLAP");
     show_line(TEXT_ROW(18));
 }
 
@@ -240,8 +240,8 @@ void video_init(void)
     addr = XRAM_PIPE_SPRITES;
     for (i = 0; i < PIPE_COUNT; ++i)
     {
-        xram0_write(addr, pipe_sprites, sizeof(pipe_sprites));
-        addr += sizeof(pipe_sprites);
+        xram0_write(addr, one_pipe, sizeof(one_pipe));
+        addr += sizeof(one_pipe);
     }
     xram0_write(XRAM_COO_SPRITE, &coo_sprite, sizeof(coo_sprite));
     video_draw();

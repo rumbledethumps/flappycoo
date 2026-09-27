@@ -27,10 +27,11 @@ static uint16_t best_load(void)
     return best;
 }
 
-// A failed save loses only the new best score, so failures are ignored.
+// Without O_TRUNC, the old best stays in the file when the write fails, so
+// only the new best is lost and failures are ignored.
 static void best_save(void)
 {
-    int fd = open(HISCORE, O_WRONLY | O_CREAT | O_TRUNC);
+    int fd = open(HISCORE, O_WRONLY | O_CREAT);
     if (fd < 0)
         return;
     write(fd, &game.best, sizeof(game.best));

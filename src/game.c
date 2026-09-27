@@ -129,7 +129,7 @@ static void play(void)
     }
 }
 
-// The press that starts a game is also its first flap.
+// The press that starts a game is also the first flap of that game.
 static void play_start(void)
 {
     game.state = STATE_PLAY;
@@ -180,6 +180,9 @@ static void coo_cycle(uint8_t first, uint8_t count)
         game.anim = 0;
     game.coo_frame = first + game.anim;
 }
+
+_Static_assert(COO_FRAME_DIVE - COO_FRAME_RISE == 3,
+               "There must be three rise frames.");
 
 static void coo_animate(void)
 {

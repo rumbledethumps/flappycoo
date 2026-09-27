@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 set(TEST_SOURCES tests/main.c tests/test_game.c src/game.c)
 
-# The unit tests on the host, with its own C compiler
+# The unit tests, built with the host C compiler
 if(HOST_TESTS)
     project(flappycoo C)
     enable_testing()
@@ -51,7 +51,7 @@ add_custom_command(
     DEPENDS img/png2bin.py img/pipe_body.png
     VERBATIM
 )
-# The cap has the same palette as the body, so its copy is not loaded.
+# The cap is drawn with the body palette, so pipe_cap_pal.bin is not loaded.
 add_custom_command(
     OUTPUT pipe_cap.bin pipe_cap_pal.bin
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/img/png2bin.py
@@ -79,6 +79,9 @@ add_custom_command(
 
 add_executable(flappycoo)
 rp6502_map(flappycoo src/xram.h "XRAM_.*")
+# The sizes in src/game.h also set XRAM addresses, and rp6502_map() adds
+# only src/xram.h to the files that configure the project again.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS src/game.h)
 rp6502_asset(flappycoo help src/help.txt)
 rp6502_asset(flappycoo XRAM(XRAM_COO_PALETTE) ${CMAKE_CURRENT_BINARY_DIR}/coo_pal.bin)
 rp6502_asset(flappycoo XRAM(XRAM_SKY_PALETTE) ${CMAKE_CURRENT_BINARY_DIR}/sky_pal.bin)

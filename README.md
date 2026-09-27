@@ -13,8 +13,10 @@ Flap through the gaps between the pipes. Each pipe passed scores a point.
 
 | Action | Keyboard | Mouse, pen or touchscreen | Gamepad |
 |---|---|---|---|
-| Flap, start | Space | click or tap | A |
+| Flap, start | Space or Enter | click or tap | A, B, X or Y |
 | Pause | P | right click | Start |
+
+The screen and the help text name only Space, click, P and right click.
 
 Flappy Coo needs version 0.34 or newer of the Picocomputer firmware or the
 emulator. Custom-size sprites and the `SAVE:` drive are new in 0.34.
@@ -56,10 +58,11 @@ network connection once.
 
 The two ROMs hold the same image data and help text and differ only in
 the program. Both pass the same emulator scripts and produce identical
-screenshots, so CI releases the smaller ROM, which today is the cc65 ROM.
-llvm-mos Release builds with `-O3`, which optimizes for speed rather than
-size. The sizes change with each code edit and compiler update, so they
-are not listed here. The job summary of each CI run lists both.
+screenshots, so CI releases the smaller ROM. The llvm-mos/Release preset
+sets `-Oz`, because the CMake default, `-O3`, optimizes for speed and makes
+a much larger program. The sizes change with each code edit and compiler
+update, so they are not listed here. The job summary of each CI run lists
+both.
 
 ## Where each part is
 
@@ -85,7 +88,7 @@ The device docs are [Keyboard](https://picocomputer.github.io/ria.html#ria-keybo
 ## Planes
 
 The canvas is 320x240. Plane 0 is the back and plane 2 is the front, and
-each plane's sprite layer is drawn over its fill layer.
+in each plane the sprite layer is drawn over the fill layer.
 
 | Plane | Fill layer | Sprite layer |
 |---|---|---|
@@ -105,14 +108,14 @@ and no image passes through 6502 RAM.
 [Adding Assets](https://picocomputer.github.io/sdk.html#sdk-assets)
 explains `rp6502_asset()`.
 
-| Image | png2bin.py command | XRAM data |
-|---|---|---|
-| `coo.png` | `sprite 8 52x36` | 18 sprite images, 256 colors |
-| `logo.png` | `bitmap 4` | a 160x82 bitmap, 16 colors |
-| `pipe_body.png` | `sprite 4 32x64` | one sprite image, 16 colors |
-| `pipe_cap.png` | `sprite 4 36x12` | one sprite image, drawn with the body palette. `pipe_cap.png` must have the same palette as `pipe_body.png`, and the cap palette is not loaded. |
-| `sky.png` | `tiles 4` | 237 tiles, a 64x27 map, 16 colors |
-| `ground.png` | `tiles 4` | 18 tiles, an 8x3 map, 16 colors |
+| Image | png2bin.py command | XRAM data | Sizes in the code |
+|---|---|---|---|
+| `coo.png` | `sprite 8 52x36` | 18 sprite images, 256 colors | `COO_W`, `COO_H` and `COO_FRAME_COUNT` in `src/game.h` |
+| `logo.png` | `bitmap 4` | a 160x82 bitmap, 16 colors | `LOGO_W` and `LOGO_H` in `src/xram.h` |
+| `pipe_body.png` | `sprite 4 32x64` | one sprite image, 16 colors | `PIPE_BODY_W` and `PIPE_BODY_H` in `src/xram.h` |
+| `pipe_cap.png` | `sprite 4 36x12` | one sprite image, drawn with the body palette. The palette in `pipe_cap.png` must match the palette in `pipe_body.png`, because the cap palette is not loaded. | `PIPE_W` in `src/game.h` and `PIPE_CAP_H` in `src/xram.h` |
+| `sky.png` | `tiles 4` | 237 tiles, a 64x27 map, 16 colors | `SKY_MAP_W` and `SKY_MAP_H` in `src/xram.h` |
+| `ground.png` | `tiles 4` | 18 tiles, an 8x3 map, 16 colors | `GROUND_MAP_W` and `GROUND_MAP_H` in `src/xram.h` |
 
 `concept.png` is the concept art that the coo frames and the logo were cut
 from. The build does not use it.
@@ -139,6 +142,12 @@ in steps of 4. The compiler stops the build when `SKY_MAP_W` or
 so the lowest 3 bits of each red, green and blue value are dropped. See
 [Colors, Palettes and Fonts](https://picocomputer.github.io/vga.html#colors-palettes-and-fonts).
 
+The sizes in the last column of the table above are not read from the
+PNGs, and no check compares the two. When a size does not match the PNG,
+the game draws garbage and the tests still pass. Data larger than the
+space for it in `xram_layout_t` usually stops the build with "ROM data
+already exists at $...", where the address is that of the data after it.
+
 ## XRAM layout
 
 `src/xram.h` holds the structures of the devices the game uses, copied from
@@ -150,7 +159,7 @@ and no address is written twice. See
 
 | Data, in order | Bytes | Why |
 |---|---|---|
-| PSG | 64 | First, because its 64 bytes must not cross a 256-byte page. |
+| PSG | 64 | First, because the PSG must not cross a 256-byte page. |
 | Palettes | 644 | Together, because sprites read colors through a 1 KB direct-mapped cache, and colors within 1 KB of each other never collide in it. |
 | Mode configurations and sprites | 192 | |
 | Keyboard, tablet, gamepads | 124 | |
@@ -211,13 +220,16 @@ which ROM was released, and the notes of each release give both sizes.
 
 ## Starting your own game
 
- * Rename the target `flappycoo` in `CMakeLists.txt`, and the ROM paths in
-   `.github/workflows/ci.yml`.
+ * Replace `flappycoo` and `Flappy Coo` with the name of the new game
+   everywhere in `CMakeLists.txt` and `.github/workflows/ci.yml`.
  * Rename `SAVE:flappycoo.hiscore` in `src/main.c`, so the scores of two
    games are in separate files.
  * Replace `src/help.txt`.
- * Replace the PNGs, then change the sizes in `src/xram.h`, `src/game.h`
-   and the png2bin commands in `CMakeLists.txt` to match.
+ * Replace the PNGs, then change each png2bin command in `CMakeLists.txt`
+   and the sizes that the Images table lists for that PNG. Fit the
+   `COO_FRAME_` frame numbers and the `COO_HIT_` hitbox in `src/game.h` to
+   the new coo. There must be three rise frames, so `COO_FRAME_DIVE` is
+   `COO_FRAME_RISE + 3`.
 
 ## Updating the tools
 

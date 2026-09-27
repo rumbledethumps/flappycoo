@@ -30,13 +30,14 @@ static void hold_coo(int16_t y)
 }
 
 // Runs one PLAY frame with the coo at y and pipe 0 at x after the frame.
-// Returns true when the frame ends in STATE_FALL.
+// Returns true when the frame ends in STATE_FALL. With world_sub at 15, the
+// frame moves the pipe at least 1 px even when WORLD_SPEED is under 16.
 static bool probe(int16_t y, int16_t x, uint8_t gap)
 {
     game.state = STATE_PLAY;
-    game.world_sub = 0;
+    game.world_sub = 15;
     hold_coo(y);
-    game.pipe_x[0] = x + 1;
+    game.pipe_x[0] = x + ((WORLD_SPEED + 15) >> 4);
     game.pipe_gap[0] = gap;
     game.pipe_x[1] = 400;
     game.pipe_x[2] = 544;
@@ -58,12 +59,12 @@ static bool frame_in(uint8_t first, uint8_t count)
     return game.coo_frame >= first && game.coo_frame < first + count;
 }
 
-// Returns one bit per frame of a cycle, and 0x80 for a frame outside it.
-static uint8_t cycle_bit(uint8_t first, uint8_t count)
+// Returns one bit per frame of a cycle, and 0x8000 for a frame outside it.
+static uint16_t cycle_bit(uint8_t first, uint8_t count)
 {
     if (!frame_in(first, count))
-        return 0x80;
-    return 1 << (game.coo_frame - first);
+        return 0x8000;
+    return 1u << (game.coo_frame - first);
 }
 
 UTEST(game, initial_state_and_title)
@@ -212,10 +213,10 @@ UTEST(play, pipe_collision)
 
     // Only the position after the coo moves up 1 px is inside the top pipe.
     game.state = STATE_PLAY;
-    game.world_sub = 0;
+    game.world_sub = 15;
     game.coo_y = 100 * 16;
     game.coo_vy = -16 - COO_GRAVITY;
-    game.pipe_x[0] = 61;
+    game.pipe_x[0] = 60 + ((WORLD_SPEED + 15) >> 4);
     game.pipe_gap[0] = 100 + COO_HIT_Y;
     game.pipe_x[1] = 400;
     game.pipe_x[2] = 544;
@@ -223,12 +224,13 @@ UTEST(play, pipe_collision)
     EXPECT_EQ(game.state, STATE_FALL);
 }
 
-// Keeps the coo inside every gap for n frames and counts EVENT_SCORE.
-static uint8_t fly_through(uint16_t n)
+// Keeps the coo inside every gap while game.distance is below distance, and
+// counts EVENT_SCORE.
+static uint8_t fly_through(uint16_t distance)
 {
     uint8_t scores = 0;
     uint8_t i;
-    while (n--)
+    while (game.distance < distance)
     {
         for (i = 0; i < PIPE_COUNT; ++i)
             game.pipe_gap[i] = 100;
@@ -244,7 +246,7 @@ static uint8_t fly_through(uint16_t n)
 UTEST(play, score_once_per_pipe)
 {
     start_play(1);
-    EXPECT_EQ(fly_through(400), 3);
+    EXPECT_EQ(fly_through(CANVAS_W + 2 * PIPE_SPACING), 3);
     EXPECT_EQ(game.score, 3u);
     // The score goes up on the first frame with the whole pipe left of the
     // hitbox.
@@ -258,7 +260,7 @@ UTEST(play, score_saturates)
 {
     start_play(1);
     game.score = 65534u;
-    EXPECT_EQ(fly_through(400), 3);
+    EXPECT_EQ(fly_through(CANVAS_W + 2 * PIPE_SPACING), 3);
     EXPECT_EQ(game.score, 65535u);
 }
 
@@ -372,7 +374,6 @@ UTEST(pipes, gap_range)
 
 UTEST(pipes, recycle_spacing)
 {
-    uint16_t n;
     uint8_t i;
     uint8_t recycles = 0;
     int16_t last[PIPE_COUNT];
@@ -381,7 +382,9 @@ UTEST(pipes, recycle_spacing)
     ref_rng = 7;
     for (i = 0; i < 2 * PIPE_COUNT; ++i)
         ref_next();
-    for (n = 0; n < 1500; ++n)
+    // The first recycle is at a distance of CANVAS_W + PIPE_W, and the next
+    // ones are PIPE_SPACING apart.
+    while (game.distance < CANVAS_W + PIPE_W + 4 * PIPE_COUNT * PIPE_SPACING)
     {
         hold_coo(100);
         for (i = 0; i < PIPE_COUNT; ++i)
@@ -405,7 +408,7 @@ UTEST(pipes, recycle_spacing)
             ASSERT_TRUE(d == PIPE_SPACING || d == PIPE_SPACING - PIPE_COUNT * PIPE_SPACING);
         }
     }
-    EXPECT_GT(recycles, 10);
+    EXPECT_EQ(recycles, 4 * PIPE_COUNT + 1);
 
     probe(100, 1 - PIPE_W, 100);
     EXPECT_EQ(game.pipe_x[0], 1 - PIPE_W);
@@ -416,23 +419,24 @@ UTEST(pipes, recycle_spacing)
 UTEST(anim, frames_per_state)
 {
     uint8_t n;
-    uint8_t seen = 0;
+    uint16_t seen = 0;
     uint8_t last;
     uint8_t changes;
     game_init(1, 0);
-    for (n = 0; n < 64; ++n)
+    for (n = 0; n < (COO_FRAME_COUNT - COO_FRAME_IDLE) * COO_ANIM_TICKS * 2; ++n)
     {
         game_update(0);
-        seen |= cycle_bit(COO_FRAME_IDLE, 4);
+        seen |= cycle_bit(COO_FRAME_IDLE, COO_FRAME_COUNT - COO_FRAME_IDLE);
     }
-    EXPECT_EQ(seen, 0x0F);
+    EXPECT_EQ(seen, (1u << (COO_FRAME_COUNT - COO_FRAME_IDLE)) - 1);
 
     game_update(BUTTON_FLAP);
-    EXPECT_EQ(game.coo_frame, COO_FRAME_RISE + 2);
+    EXPECT_EQ(game.coo_frame, COO_FRAME_DIVE - 1);
     last = game.coo_frame;
     for (n = 0; n < 100 && game.coo_vy < 0; ++n)
     {
-        ASSERT_TRUE(frame_in(COO_FRAME_RISE, 3) && game.coo_frame <= last);
+        ASSERT_TRUE(frame_in(COO_FRAME_RISE, COO_FRAME_DIVE - COO_FRAME_RISE) &&
+                    game.coo_frame <= last);
         last = game.coo_frame;
         game_update(0);
     }
@@ -440,31 +444,31 @@ UTEST(anim, frames_per_state)
 
     seen = 0;
     changes = 0;
-    for (n = 0; n < 7 * COO_ANIM_TICKS * 2; ++n)
+    for (n = 0; n < (COO_FRAME_RISE - COO_FRAME_FLAP) * COO_ANIM_TICKS * 2; ++n)
     {
         last = game.coo_frame;
         hold_coo(100);
         game_update(0);
-        seen |= cycle_bit(COO_FRAME_FLAP, 7);
+        seen |= cycle_bit(COO_FRAME_FLAP, COO_FRAME_RISE - COO_FRAME_FLAP);
         changes += game.coo_frame != last;
     }
-    EXPECT_EQ(seen, 0x7F);
-    EXPECT_EQ(changes, 14);
+    EXPECT_EQ(seen, (1u << (COO_FRAME_RISE - COO_FRAME_FLAP)) - 1);
+    EXPECT_EQ(changes, (COO_FRAME_RISE - COO_FRAME_FLAP) * 2);
 
     seen = 0;
-    for (n = 0; n < 4 * COO_ANIM_TICKS * 2; ++n)
+    for (n = 0; n < (COO_FRAME_IDLE - COO_FRAME_DIVE) * COO_ANIM_TICKS * 2; ++n)
     {
         game.coo_y = 100 * 16;
         game.coo_vy = COO_MAX_VY;
         game_update(0);
-        seen |= cycle_bit(COO_FRAME_DIVE, 4);
+        seen |= cycle_bit(COO_FRAME_DIVE, COO_FRAME_IDLE - COO_FRAME_DIVE);
     }
-    EXPECT_EQ(seen, 0x0F);
+    EXPECT_EQ(seen, (1u << (COO_FRAME_IDLE - COO_FRAME_DIVE)) - 1);
 
     probe(100, 60, 0);
     for (n = 0; n < 100; ++n)
     {
-        ASSERT_TRUE(frame_in(COO_FRAME_DIVE, 4));
+        ASSERT_TRUE(frame_in(COO_FRAME_DIVE, COO_FRAME_IDLE - COO_FRAME_DIVE));
         game_update(0);
     }
     EXPECT_EQ(game.state, STATE_OVER);
