@@ -1,0 +1,4 @@
+# The game boots, and Escape quits with exit code 0.
+run 60
+press escape
+expect-exit 0 60

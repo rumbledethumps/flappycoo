@@ -1,0 +1,18 @@
+# Pictures of each screen, written to the build directory.
+run 60
+shot "title.png"
+press space
+run 2
+release space
+run 30
+shot "play.png"
+press p
+run 2
+release p
+run 2
+shot "paused.png"
+press p
+run 2
+release p
+run 300
+shot "over.png"

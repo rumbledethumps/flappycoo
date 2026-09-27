@@ -1,0 +1,19 @@
+# Space starts a game, and P pauses and resumes it. The title screen
+# changes every frame, so expect-same passes only on a paused game.
+run 30
+press space
+run 2
+release space
+run 20
+press p
+run 2
+release p
+run 5
+mark
+run 30
+expect-same
+press p
+run 2
+release p
+run 5
+expect-changed

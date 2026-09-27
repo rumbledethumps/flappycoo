@@ -1,2 +1,7 @@
-This information is displayed with the HELP and INFO monitor commands.
-Please change it to suit your project.
+Flappy Coo
+
+Flap through the gaps between the pipes. Each pipe passed scores a point.
+
+Flap:  Space, click, tap or gamepad A
+Pause: P, right click or gamepad Start
+Quit:  Escape

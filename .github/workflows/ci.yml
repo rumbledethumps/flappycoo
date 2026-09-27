@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # The run for each commit to main is in a separate group. With one shared
+  # group, a third push cancels the second run while it waits, and that
+  # commit then gets no release and no failure. Pull request runs still
+  # cancel older runs.
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  flappycoo:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # CI builds with the same compilers users install.
+      - name: Install cc65
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/picocomputer/.github/main/install/cc65.sh | sh
+          echo "$HOME/.rp6502/cc65/bin" >> "$GITHUB_PATH"
+
+      - name: Install llvm-mos
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/picocomputer/.github/main/install/llvm-mos.sh | sh
+          echo "$HOME/.rp6502/llvm-mos/bin" >> "$GITHUB_PATH"
+
+      - name: Test the game rules on the host
+        run: |
+          set -euo pipefail
+          cmake --preset host
+          cmake --build --preset host
+          ctest --preset host
+
+      # The configure fetches the emulator, which git ignores, because
+      # rp6502_map() runs a program on it.
+      - name: Build and test with cc65
+        run: |
+          set -euo pipefail
+          cmake --preset cc65/Release
+          cmake --build --preset cc65/Release
+          ctest --preset cc65/Release
+
+      - name: Build and test with llvm-mos
+        run: |
+          set -euo pipefail
+          cmake --preset llvm-mos/Release
+          cmake --build --preset llvm-mos/Release
+          ctest --preset llvm-mos/Release
+
+      - name: Pick the smaller ROM
+        id: pick
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse --short HEAD)
+          # The HEAD of a pull request is a merge commit that exists only in
+          # this run, so a pull request's files are named for the run.
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            name="flappycoo-${sha}"
+          else
+            name="flappycoo-${GITHUB_RUN_ID}"
+          fi
+          # The program that rp6502_map() runs while CMake configures is also
+          # a .rp6502 file, so the ROMs are named by their exact paths.
+          cc65_rom=build/cc65/release/flappycoo.rp6502
+          llvm_mos_rom=build/llvm-mos/release/flappycoo.rp6502
+          cc65_size=$(stat -c %s "$cc65_rom")
+          llvm_mos_size=$(stat -c %s "$llvm_mos_rom")
+          if [ "$llvm_mos_size" -lt "$cc65_size" ]; then
+            compiler=llvm-mos
+            rom=$llvm_mos_rom
+          else
+            compiler=cc65
+            rom=$cc65_rom
+          fi
+          mkdir -p "$name/cc65" "$name/llvm-mos"
+          cp "$rom" "$name/flappycoo.rp6502"
+          for build in cc65 llvm-mos; do
+            for shot in title play paused over; do
+              cp "build/$build/release/$shot.png" "$name/$build/"
+            done
+          done
+          ls -lR "$name"
+          {
+            echo "| Compiler | flappycoo.rp6502 (bytes) |"
+            echo "|---|---|"
+            echo "| cc65 | ${cc65_size} |"
+            echo "| llvm-mos | ${llvm_mos_size} |"
+            echo
+            echo "Released: the ${compiler} ROM."
+          } >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "sha=${sha}"
+            echo "name=${name}"
+            echo "compiler=${compiler}"
+            echo "cc65_size=${cc65_size}"
+            echo "llvm_mos_size=${llvm_mos_size}"
+          } >> "$GITHUB_OUTPUT"
+
+      # The name ends in .zip because that is the filename the download is
+      # served with.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.pick.outputs.name }}.zip
+          path: ${{ steps.pick.outputs.name }}/
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: build-${{ steps.pick.outputs.sha }}
+          # Without this the tag is created on whatever the default branch
+          # points at when the release is published, not on what was built.
+          target_commitish: ${{ github.sha }}
+          name: Flappy Coo ${{ steps.pick.outputs.sha }}
+          files: ${{ steps.pick.outputs.name }}/flappycoo.rp6502
+          fail_on_unmatched_files: true
+          body: |
+            Flappy Coo for the Picocomputer 6502, built with ${{ steps.pick.outputs.compiler }}.
+            The cc65 ROM is ${{ steps.pick.outputs.cc65_size }} bytes and the llvm-mos ROM is ${{ steps.pick.outputs.llvm_mos_size }} bytes.
+
+            Run `flappycoo.rp6502` in the emulator, or load it on a
+            Picocomputer. Both need version 0.34 or newer.
+
+            https://picocomputer.github.io

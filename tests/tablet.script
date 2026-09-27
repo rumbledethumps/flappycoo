@@ -1,0 +1,20 @@
+# A left click starts a game, and a right click pauses and resumes it. The
+# title screen changes every frame, so expect-same passes only on a paused
+# game.
+run 30
+tablet at 160 120 1
+run 2
+tablet at 160 120 0
+run 20
+tablet at 160 120 2
+run 2
+tablet at 160 120 0
+run 5
+mark
+run 30
+expect-same
+tablet at 160 120 2
+run 2
+tablet at 160 120 0
+run 5
+expect-changed
