@@ -221,8 +221,8 @@ commit.
 
  * Replace `flappycoo` and `Flappy Coo` with the name of the new game
    everywhere in `CMakeLists.txt`, `.github/workflows/ci.yml` and
-   `index.html`, and set `db` in `index.html` to your user name and the
-   name of the game.
+   `index.html`, and set `db` in `index.html` to your full user name and
+   the full project name, such as `rumbledethumps-flappycoo`.
  * Turn on GitHub Pages with Settings > Pages > Source: GitHub Actions,
    or delete the `pages` job from `.github/workflows/ci.yml`. Change the
    play link at the top of this README to the new Pages address.
