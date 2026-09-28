@@ -41,5 +41,16 @@
                 "${command:cmake.launchTargetPath}.rp6502"
             ],
         },
+        {
+            "name": "RP6502 (Web)",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "program": "${workspaceFolder}/tools/rp6502.py",
+            "args": [
+                "web",
+                "${command:cmake.buildDirectory}"
+            ],
+        },
     ]
 }

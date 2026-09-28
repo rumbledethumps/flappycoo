@@ -94,6 +94,7 @@ rp6502_asset(flappycoo XRAM(XRAM_LOGO) ${CMAKE_CURRENT_BINARY_DIR}/logo.bin)
 rp6502_asset(flappycoo XRAM(XRAM_PIPE_BODY) ${CMAKE_CURRENT_BINARY_DIR}/pipe_body.bin)
 rp6502_asset(flappycoo XRAM(XRAM_PIPE_CAP) ${CMAKE_CURRENT_BINARY_DIR}/pipe_cap.bin)
 rp6502_executable(flappycoo DATA default RESET default)
+rp6502_web(flappycoo PAGE web/index.html)
 target_sources(flappycoo PRIVATE
     src/game.c
     src/input.c
