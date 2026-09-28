@@ -11,11 +11,10 @@ game of your own. It builds with either 6502 compiler, cc65 or llvm-mos.
 preset: llvm-mos/Release
 target: flappycoo
 title: Flappy Coo
-image: img/play.png
 db: flappycoo
 footer: Space or click to flap, P to pause.
 -->
-[![Play Flappy Coo](img/play.png)](https://rumbledethumps.github.io/flappycoo/flappycoo/)
+[![Play Flappy Coo](https://rumbledethumps.github.io/flappycoo/flappycoo/screenshot.png)](https://rumbledethumps.github.io/flappycoo/flappycoo/)
 
 [Play it in your browser](https://rumbledethumps.github.io/flappycoo/flappycoo/).
 
@@ -87,7 +86,7 @@ summary of each CI run lists both.
 | Sound | `src/sound.c` | One PSG channel each for the flap, the score, a hit and the "moo" at game over. |
 | Input | `src/input.c` | The keyboard, the tablet and up to four gamepads are read into two buttons: flap and pause. A mouse, a pen and each finger on a touchscreen are all contacts of the tablet device. |
 | Help | `src/help.txt` | Shown by HELP and INFO on a Picocomputer and in the ROM Help window of the emulator. |
-| Web player | `README.md`, `img/play.png` | The comment above the play link names the preset, the target and the page settings, and `.github/workflows/web.yml` publishes the player to GitHub Pages. `img/play.png` is the title screen, shown while the player loads. See [RP6502-WEB](https://picocomputer.github.io/web.html). |
+| Web player | `README.md` | The comment above the play link names the preset, the target and the page settings, and `.github/workflows/web.yml` publishes the player to GitHub Pages, with a screenshot of the title screen that the play link shows. See [RP6502-WEB](https://picocomputer.github.io/web.html). |
 
 The device docs are [Keyboard](https://picocomputer.github.io/ria.html#ria-keyboard),
 [Tablet](https://picocomputer.github.io/ria.html#tablet),
@@ -229,11 +228,9 @@ commit.
  * Replace `flappycoo` and `Flappy Coo` with the name of the new game
    everywhere in `CMakeLists.txt`, `.github/workflows/ci.yml` and the
    comment above the play link in this README, and change the play link
-   to the new Pages address.
+   and its screenshot to the new Pages address.
  * Turn on GitHub Pages with Settings > Pages > Source: GitHub Actions,
    or delete `.github/workflows/web.yml`.
- * Replace `img/play.png` with a screenshot of the new game, made with
-   `tools/rp6502-emu build/llvm-mos/release/<game>.rp6502 --screenshot img/play.png`.
  * Rename `SAVE:flappycoo.hiscore` in `src/main.c`, so the scores of two
    games are in separate files.
  * Replace `src/help.txt`.
