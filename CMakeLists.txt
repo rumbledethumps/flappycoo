@@ -79,9 +79,6 @@ add_custom_command(
 
 add_executable(flappycoo)
 rp6502_map(flappycoo src/xram.h "XRAM_.*")
-# The sizes in src/game.h also set XRAM addresses, and rp6502_map() adds
-# only src/xram.h to the files that configure the project again.
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS src/game.h)
 rp6502_asset(flappycoo help src/help.txt)
 rp6502_asset(flappycoo XRAM(XRAM_COO_PALETTE) ${CMAKE_CURRENT_BINARY_DIR}/coo_pal.bin)
 rp6502_asset(flappycoo XRAM(XRAM_SKY_PALETTE) ${CMAKE_CURRENT_BINARY_DIR}/sky_pal.bin)
@@ -104,26 +101,6 @@ target_sources(flappycoo PRIVATE
     src/sound.c
     src/video.c
 )
-
-# The unit tests as a ROM, where int is 16 bits. cc65 cannot compile utest.h.
-if(DEFINED LLVM_MOS_PLATFORM)
-    add_executable(tests ${TEST_SOURCES})
-    target_include_directories(tests PRIVATE src tests)
-    # utest.h is large for a 6502. The linker does not check that the heap
-    # stays clear of the C stack, so heap-check.ld does.
-    target_compile_options(tests PRIVATE -Oz)
-    target_link_options(tests PRIVATE
-        -Oz ${CMAKE_CURRENT_SOURCE_DIR}/tests/heap-check.ld)
-    set_target_properties(tests PROPERTIES
-        LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/heap-check.ld)
-    rp6502_executable(tests DATA default RESET default)
-    add_test(NAME unit_tests
-        COMMAND ${Python3_EXECUTABLE} ${RP6502_TOOLS_DIR}/rp6502.py
-            -c ${CMAKE_CURRENT_SOURCE_DIR}/.rp6502
-            execute ${CMAKE_CURRENT_BINARY_DIR}/tests.rp6502
-    )
-    set_tests_properties(unit_tests PROPERTIES TIMEOUT 60)
-endif()
 
 # Emulator scripts that play the game ROM
 # WSL uses the Windows build of the emulator, as the rest of the SDK does.

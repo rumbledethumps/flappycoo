@@ -46,31 +46,31 @@ typedef struct
     uint16_t xram_data_ptr;
     uint16_t xram_palette_ptr;
     uint16_t xram_font_ptr;
-} mode1_config_t;
+} mode1_config_t; /* layout */
 
 typedef struct
 {
     uint8_t glyph_code;
-} mode1_1bpp_data_t;
+} mode1_1bpp_data_t; /* layout */
 
 typedef struct
 {
     uint8_t glyph_code;
     uint8_t fg_bg_index;
-} mode1_4bppr_data_t;
+} mode1_4bppr_data_t; /* layout */
 
 typedef struct
 {
     uint8_t glyph_code;
     uint8_t bg_fg_index;
-} mode1_4bpp_data_t;
+} mode1_4bpp_data_t; /* layout */
 
 typedef struct
 {
     uint8_t glyph_code;
     uint8_t fg_index;
     uint8_t bg_index;
-} mode1_8bpp_data_t;
+} mode1_8bpp_data_t; /* layout */
 
 typedef struct
 {
@@ -78,7 +78,7 @@ typedef struct
     uint8_t attributes;
     uint16_t fg_color;
     uint16_t bg_color;
-} mode1_16bpp_data_t;
+} mode1_16bpp_data_t; /* layout */
 
 #define xreg_vga_mode2(...) xreg(1, 0, 1, 2, __VA_ARGS__)
 
@@ -113,7 +113,7 @@ typedef struct
     uint16_t xram_data_ptr;
     uint16_t xram_palette_ptr;
     uint16_t xram_tile_ptr;
-} mode2_config_t;
+} mode2_config_t; /* layout */
 
 #define xreg_vga_mode3(...) xreg(1, 0, 1, 3, __VA_ARGS__)
 
@@ -135,7 +135,7 @@ typedef struct
     int16_t height_px;
     uint16_t xram_data_ptr;
     uint16_t xram_palette_ptr;
-} mode3_config_t;
+} mode3_config_t; /* layout */
 
 #define xreg_vga_mode5(...) xreg(1, 0, 1, 5, __VA_ARGS__)
 
@@ -185,7 +185,7 @@ typedef struct
     int16_t y_pos_px;
     uint16_t xram_sprite_ptr;
     uint16_t palette_ptr;
-} mode5_sprite_t;
+} mode5_sprite_t; /* layout */
 
 typedef struct
 {
@@ -195,7 +195,7 @@ typedef struct
     uint16_t palette_ptr;
     uint8_t width_height;
     uint8_t options;
-} mode5_csprite_t;
+} mode5_csprite_t; /* layout */
 
 #define KEYBOARD_NO_KEY 0
 #define KEYBOARD_NUM_LOCK 1
@@ -209,7 +209,7 @@ typedef struct
 typedef struct
 {
     uint8_t keys[32];
-} keyboard_t;
+} keyboard_t; /* layout */
 
 #define TABLET_CONTACTS 8
 
@@ -234,17 +234,19 @@ typedef struct
 
 typedef struct
 {
+    uint8_t flags;
+    uint8_t x0, x1, x2;
+    uint8_t y0, y1;
+} tablet_contact_t;
+
+typedef struct
+{
     uint8_t control;
     uint8_t status;
     uint8_t wheel;
     uint8_t pan;
-    struct
-    {
-        uint8_t flags;
-        uint8_t x0, x1, x2;
-        uint8_t y0, y1;
-    } contact[TABLET_CONTACTS];
-} tablet_t;
+    tablet_contact_t contact[TABLET_CONTACTS];
+} tablet_t; /* layout */
 
 #define GAMEPAD_PLAYERS 4
 
@@ -291,20 +293,22 @@ typedef struct
 
 typedef struct
 {
-    struct
-    {
-        uint8_t dpad;
-        uint8_t sticks;
-        uint8_t btn0;
-        uint8_t btn1;
-        int8_t lx;
-        int8_t ly;
-        int8_t rx;
-        int8_t ry;
-        uint8_t l2;
-        uint8_t r2;
-    } player[GAMEPAD_PLAYERS];
-} gamepad_t;
+    uint8_t dpad;
+    uint8_t sticks;
+    uint8_t btn0;
+    uint8_t btn1;
+    int8_t lx;
+    int8_t ly;
+    int8_t rx;
+    int8_t ry;
+    uint8_t l2;
+    uint8_t r2;
+} gamepad_player_t;
+
+typedef struct
+{
+    gamepad_player_t player[GAMEPAD_PLAYERS];
+} gamepad_t; /* layout */
 
 #define PSG_CHANNELS 8
 
@@ -323,17 +327,19 @@ typedef struct
 
 typedef struct
 {
-    struct
-    {
-        uint16_t freq;
-        uint8_t duty;
-        uint8_t vol_attack;
-        uint8_t vol_decay;
-        uint8_t wave_release;
-        uint8_t pan_gate;
-        uint8_t reserved;
-    } channel[PSG_CHANNELS];
-} psg_t;
+    uint16_t freq;
+    uint8_t duty;
+    uint8_t attack;
+    uint8_t decay;
+    uint8_t release_wave;
+    uint8_t pan_gate;
+    uint8_t reserved;
+} psg_channel_t;
+
+typedef struct
+{
+    psg_channel_t channel[PSG_CHANNELS];
+} psg_t; /* layout */
 
 // The HID keycodes that the game reads
 #define HID_KEY_P 0x13

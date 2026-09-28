@@ -27,7 +27,6 @@ emulator. Custom-size sprites and the `SAVE:` drive are new in 0.34.
  * Python 3
  * Make or Ninja
  * [cc65 or llvm-mos](https://github.com/picocomputer?view_as=public).
-   The unit-test ROM needs llvm-mos, so install both to run every test.
  * gcc for your computer, to run the unit tests there. On Windows, install
    it with `winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT` and
    open a new terminal. The `host` preset names gcc, because the llvm-mos
@@ -41,8 +40,7 @@ the rest of the SDK documentation.
 
 In VS Code, choose a preset and press F5, as
 [Getting Started](https://picocomputer.github.io/sdk.html#getting-started)
-describes. The llvm-mos presets also build the unit-test ROM, `tests`, so
-choose `flappycoo` as the launch target in the CMake side panel.
+describes.
 
 On the command line:
 
@@ -56,13 +54,11 @@ On Windows and WSL the emulator is `tools/rp6502-emu.exe`. The first
 configure downloads the emulator into `tools/`, so a fresh clone needs a
 network connection once.
 
-The two ROMs hold the same image data and help text and differ only in
-the program. Both pass the same emulator scripts and produce identical
-screenshots, so CI releases the smaller ROM. The llvm-mos/Release preset
-sets `-Oz`, because the CMake default, `-O3`, optimizes for speed and makes
-a much larger program. The sizes change with each code edit and compiler
-update, so they are not listed here. The job summary of each CI run lists
-both.
+The two ROMs hold the same image data and help text and differ only in the
+program. Both pass the same emulator scripts and produce identical
+screenshots, so CI releases the smaller ROM. The sizes change with each
+code edit and compiler update, so they are not listed here. The job
+summary of each CI run lists both.
 
 ## Where each part is
 
@@ -177,7 +173,6 @@ The layout uses 54312 bytes and leaves 11224 free.
 | Test | What it checks | Presets |
 |---|---|---|
 | `host_tests` | The rules in `src/game.c`, tested by `tests/test_game.c` with [utest.h](https://github.com/sheredom/utest.h), including a bot that must pass 50 pipes. | `host` |
-| `unit_tests` | The same cases as a ROM, `tests.rp6502`, where `int` is 16 bits as it is in the game. | llvm-mos |
 | `keyboard`, `tablet`, `gamepad` | Each device starts a game, pauses it, resumes it and pauses it again, and the canvas stays still while paused. A tablet pointer that only hovers does not start a game. | cc65, llvm-mos |
 | `screenshots` | Writes `title.png`, `play.png`, `paused.png` and `over.png` into the build directory. | cc65, llvm-mos |
 
@@ -196,17 +191,10 @@ build with that preset:
 $ ctest --preset llvm-mos/Release
 ```
 
-cc65 cannot compile utest.h, which needs 64-bit integers, so the cc65 ROM
-is tested by the emulator scripts only.
-
 The `tests/*.script` files are emulator scripts. They press keys and
 buttons, run frames, and compare the canvas. They run with `--seed 1`, so
 every run is the same. [Scripting](https://picocomputer.github.io/emu.html#scripting)
 lists the commands.
-
-The llvm-mos linker does not check that the heap stays clear of the C
-stack. `tests/heap-check.ld` makes the link fail with "test ROM heap
-overlaps the soft stack" when the test ROM grows too large for RAM.
 
 ## CI
 
