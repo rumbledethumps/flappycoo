@@ -23,6 +23,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    outputs:
+      latest: ${{ steps.tip.outputs.latest }}
     steps:
       - uses: actions/checkout@v7
 
@@ -155,3 +157,40 @@ jobs:
             Picocomputer. Both need version 0.34 or newer.
 
             https://picocomputer.github.io
+
+      # The web player, with the emulator from the latest rp6502 release.
+      - name: Make the web player
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download --repo picocomputer/rp6502 --pattern '*-itch.io.zip' --output web.zip
+          mkdir site
+          unzip -j web.zip rp6502.js rp6502.wasm -d site
+          cp index.html page.js "${{ steps.pick.outputs.name }}/flappycoo.rp6502" \
+            "build/${{ steps.pick.outputs.compiler }}/release/title.png" site/
+
+      - uses: actions/upload-pages-artifact@v5
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: site
+
+  # Only the run for the tip of main deploys, so that a run for an older
+  # commit never replaces a newer page, as with the Latest release.
+  pages:
+    needs: flappycoo
+    if: github.ref == 'refs/heads/main' && needs.flappycoo.outputs.latest == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5
