@@ -7,9 +7,17 @@ game is in it: screens, a saved best score, animated sprites, scrolling
 tiles, a bitmap, text, sound and three kinds of input. Copy it to start a
 game of your own. It builds with either 6502 compiler, cc65 or llvm-mos.
 
-[![Play Flappy Coo](https://rumbledethumps.github.io/flappycoo/title.png)](https://rumbledethumps.github.io/flappycoo/)
+<!-- rp6502
+preset: llvm-mos/Release
+target: flappycoo
+title: Flappy Coo
+image: img/play.png
+db: flappycoo
+footer: Space or click to flap, P to pause.
+-->
+[![Play Flappy Coo](img/play.png)](https://rumbledethumps.github.io/flappycoo/flappycoo/)
 
-[Play it in your browser](https://rumbledethumps.github.io/flappycoo/).
+[Play it in your browser](https://rumbledethumps.github.io/flappycoo/flappycoo/).
 
 ## Playing
 
@@ -79,7 +87,7 @@ summary of each CI run lists both.
 | Sound | `src/sound.c` | One PSG channel each for the flap, the score, a hit and the "moo" at game over. |
 | Input | `src/input.c` | The keyboard, the tablet and up to four gamepads are read into two buttons: flap and pause. A mouse, a pen and each finger on a touchscreen are all contacts of the tablet device. |
 | Help | `src/help.txt` | Shown by HELP and INFO on a Picocomputer and in the ROM Help window of the emulator. |
-| Web player | `index.html` | The page on GitHub Pages, with the click-to-play overlay, the footer, and the title screenshot as the picture. See [RP6502-WEB](https://picocomputer.github.io/web.html). |
+| Web player | `README.md`, `img/play.png` | The comment above the play link names the preset, the target and the page settings, and `.github/workflows/web.yml` publishes the player to GitHub Pages. `img/play.png` is the title screen, shown while the player loads. See [RP6502-WEB](https://picocomputer.github.io/web.html). |
 
 The device docs are [Keyboard](https://picocomputer.github.io/ria.html#ria-keyboard),
 [Tablet](https://picocomputer.github.io/ria.html#tablet),
@@ -211,21 +219,21 @@ release tagged `build-<commit>`, which becomes the Latest release only when
 `main` is still at that commit. The job summary lists both ROM sizes and
 which ROM was released, and the notes of each release give both sizes.
 
-On `main`, CI also publishes the web player to GitHub Pages: `index.html`,
-the released ROM, `title.png` from the `screenshots` test, and
-`rp6502.js` and `rp6502.wasm` from the latest rp6502 release. Like the
+`.github/workflows/web.yml` publishes the web player to GitHub Pages on
+each push to `main`, with the picocomputer/.github web workflow. Like the
 Latest release, the page is replaced only when `main` is still at that
 commit.
 
 ## Starting your own game
 
  * Replace `flappycoo` and `Flappy Coo` with the name of the new game
-   everywhere in `CMakeLists.txt`, `.github/workflows/ci.yml` and
-   `index.html`, and set `db` in `index.html` to your full user name and
-   the full project name, such as `rumbledethumps-flappycoo`.
+   everywhere in `CMakeLists.txt`, `.github/workflows/ci.yml` and the
+   comment above the play link in this README, and change the play link
+   to the new Pages address.
  * Turn on GitHub Pages with Settings > Pages > Source: GitHub Actions,
-   or delete the `pages` job from `.github/workflows/ci.yml`. Change the
-   play link at the top of this README to the new Pages address.
+   or delete `.github/workflows/web.yml`.
+ * Replace `img/play.png` with a screenshot of the new game, made with
+   `tools/rp6502-emu build/llvm-mos/release/<game>.rp6502 --screenshot img/play.png`.
  * Rename `SAVE:flappycoo.hiscore` in `src/main.c`, so the scores of two
    games are in separate files.
  * Replace `src/help.txt`.
