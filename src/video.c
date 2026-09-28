@@ -47,7 +47,7 @@ static const mode2_config_t ground_config = {
 // Each pipe is four sprites: top body, top cap, bottom cap, bottom body.
 // Every row of the body image is the same, so the image drawn at double
 // height covers the longest pipe with half the XRAM.
-static const mode5_csprite_t one_pipe[4] = {
+static mode5_csprite_t one_pipe[4] = {
     {0, 0, XRAM_PIPE_BODY, XRAM_PIPE_PALETTE,
      MODE5_SIZE(PIPE_BODY_W, PIPE_BODY_H), MODE5_4BPP | MODE5_VDOUBLE},
     {0, 0, XRAM_PIPE_CAP, XRAM_PIPE_PALETTE,
@@ -57,7 +57,7 @@ static const mode5_csprite_t one_pipe[4] = {
     {0, 0, XRAM_PIPE_BODY, XRAM_PIPE_PALETTE,
      MODE5_SIZE(PIPE_BODY_W, PIPE_BODY_H), MODE5_4BPP | MODE5_VDOUBLE}};
 
-static const mode5_csprite_t coo_sprite = {
+static mode5_csprite_t coo_sprite = {
     COO_X, 0, XRAM_COO, XRAM_COO_PALETTE,
     MODE5_SIZE(COO_W, COO_H), MODE5_8BPP};
 
@@ -70,22 +70,6 @@ static uint8_t line_length;
 static uint8_t shown_screen = SCREEN_NONE;
 static uint16_t shown_score;
 
-static void word_write(uint16_t addr, uint16_t value)
-{
-    RIA.addr0 = addr;
-    RIA.rw0 = value & 0xFF;
-    RIA.rw0 = value >> 8;
-}
-
-static void sprite_move(uint16_t sprite, int16_t x, int16_t y)
-{
-    RIA.addr0 = sprite;
-    RIA.rw0 = x & 0xFF;
-    RIA.rw0 = x >> 8;
-    RIA.rw0 = y & 0xFF;
-    RIA.rw0 = y >> 8;
-}
-
 static void pipes_draw(void)
 {
     uint8_t i;
@@ -96,12 +80,15 @@ static void pipes_draw(void)
     {
         x = game.pipe_x[i];
         gap = game.pipe_gap[i];
-        sprite_move(sprite, x + PIPE_BODY_X,
-                    gap - PIPE_CAP_H - PIPE_BODY_H * 2);
-        sprite_move(sprite + sizeof(mode5_csprite_t), x, gap - PIPE_CAP_H);
-        sprite_move(sprite + sizeof(mode5_csprite_t) * 2, x, gap + PIPE_GAP);
-        sprite_move(sprite + sizeof(mode5_csprite_t) * 3, x + PIPE_BODY_X,
-                    gap + PIPE_GAP + PIPE_CAP_H);
+        one_pipe[0].x_pos_px = x + PIPE_BODY_X;
+        one_pipe[0].y_pos_px = gap - PIPE_CAP_H - PIPE_BODY_H * 2;
+        one_pipe[1].x_pos_px = x;
+        one_pipe[1].y_pos_px = gap - PIPE_CAP_H;
+        one_pipe[2].x_pos_px = x;
+        one_pipe[2].y_pos_px = gap + PIPE_GAP;
+        one_pipe[3].x_pos_px = x + PIPE_BODY_X;
+        one_pipe[3].y_pos_px = gap + PIPE_GAP + PIPE_CAP_H;
+        xram0_write(sprite, one_pipe, sizeof(one_pipe));
         sprite += sizeof(one_pipe);
     }
 }
@@ -207,15 +194,16 @@ static void text_draw(void)
 void video_draw(void)
 {
     pipes_draw();
-    sprite_move(XRAM_COO_SPRITE, COO_X, game.coo_y >> 4);
-    word_write(XRAM_COO_SPRITE + offsetof(mode5_csprite_t, xram_sprite_ptr),
-               coo_images[game.coo_frame]);
-    word_write(XRAM_SKY_CONFIG + offsetof(mode2_config_t, x_pos_px),
-               -((game.distance >> 2) & (SKY_MAP_W * 8 - 1)));
-    word_write(XRAM_GROUND_CONFIG + offsetof(mode2_config_t, x_pos_px),
-               -(game.distance & (GROUND_MAP_W * 8 - 1)));
-    word_write(XRAM_LOGO_CONFIG + offsetof(mode3_config_t, x_pos_px),
-               game.state == STATE_TITLE ? LOGO_X : CANVAS_W);
+    coo_sprite.y_pos_px = game.coo_y >> 4;
+    coo_sprite.xram_sprite_ptr = coo_images[game.coo_frame];
+    xram0_write(XRAM_COO_SPRITE, &coo_sprite,
+                offsetof(mode5_csprite_t, palette_ptr));
+    xram0_poke16(XRAM_SKY_CONFIG + offsetof(mode2_config_t, x_pos_px),
+                 -((game.distance >> 2) & (SKY_MAP_W * 8 - 1)));
+    xram0_poke16(XRAM_GROUND_CONFIG + offsetof(mode2_config_t, x_pos_px),
+                 -(game.distance & (GROUND_MAP_W * 8 - 1)));
+    xram0_poke16(XRAM_LOGO_CONFIG + offsetof(mode3_config_t, x_pos_px),
+                 game.state == STATE_TITLE ? LOGO_X : CANVAS_W);
     text_draw();
 }
 
@@ -237,12 +225,6 @@ void video_init(void)
     xram0_write(XRAM_LOGO_CONFIG, &logo_config, sizeof(logo_config));
     xram0_write(XRAM_TEXT_CONFIG, &text_config, sizeof(text_config));
     xram0_write(XRAM_GROUND_CONFIG, &ground_config, sizeof(ground_config));
-    addr = XRAM_PIPE_SPRITES;
-    for (i = 0; i < PIPE_COUNT; ++i)
-    {
-        xram0_write(addr, one_pipe, sizeof(one_pipe));
-        addr += sizeof(one_pipe);
-    }
     xram0_write(XRAM_COO_SPRITE, &coo_sprite, sizeof(coo_sprite));
     video_draw();
 

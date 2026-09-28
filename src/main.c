@@ -46,12 +46,12 @@ int main(void)
     sound_init();
     input_init();
     video_init();
-    vsync = RIA.vsync;
+    vsync = ria_vsync();
     while (true)
     {
-        while (RIA.vsync == vsync)
+        while (ria_vsync() == vsync)
             ;
-        vsync = RIA.vsync;
+        vsync = ria_vsync();
         video_draw();
         events = game_update(input_read());
         sound_update(events);
