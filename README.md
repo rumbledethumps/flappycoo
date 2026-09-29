@@ -83,7 +83,7 @@ summary of each CI run lists both.
 | Sound | `src/sound.c` | One PSG channel each for the flap, the score, a hit and the "moo" at game over. |
 | Input | `src/input.c` | The keyboard, the tablet and up to four gamepads are read into two buttons: flap and pause. A mouse, a pen and each finger on a touchscreen are all contacts of the tablet device. |
 | Help | `src/help.txt` | Shown by HELP and INFO on a Picocomputer and in the ROM Help window of the emulator. |
-| Web player | `web/index.html`, `README.md` | `rp6502_web()` in `CMakeLists.txt` packages the ROM with `web/index.html`, and "RP6502 (Web)" in VS Code plays it in a browser. The comment above the play link names the zip, and `.github/workflows/web.yml` publishes it to GitHub Pages, with a screenshot of the title screen that the play link shows. See [RP6502-WEB](https://picocomputer.github.io/web.html). |
+| Web player | `CMakeLists.txt`, `README.md` | `rp6502_web()` in `CMakeLists.txt` packages the ROM with the page settings in its `CONFIG`, and "RP6502-WEB" in VS Code plays it in a browser. The comment above the play link names the zip, and `.github/workflows/web.yml` publishes it to GitHub Pages, with a screenshot of the title screen that the play link shows. See [RP6502-WEB](https://picocomputer.github.io/web.html). |
 
 The device docs are [Keyboard](https://picocomputer.github.io/ria.html#ria-keyboard),
 [Tablet](https://picocomputer.github.io/ria.html#tablet),
@@ -223,9 +223,9 @@ commit.
 ## Starting your own game
 
  * Replace `flappycoo` and `Flappy Coo` with the name of the new game
-   everywhere in `CMakeLists.txt`, `.github/workflows/ci.yml`,
-   `web/index.html` and the comment above the play link in this README,
-   and change the play link and its screenshot to the new Pages address.
+   everywhere in `CMakeLists.txt`, `.github/workflows/ci.yml` and the
+   comment above the play link in this README, and change the play link
+   and its screenshot to the new Pages address.
  * Turn on GitHub Pages with Settings > Pages > Source: GitHub Actions,
    or delete `.github/workflows/web.yml`.
  * Rename `SAVE:flappycoo.hiscore` in `src/main.c`, so the scores of two

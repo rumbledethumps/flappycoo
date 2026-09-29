@@ -94,7 +94,11 @@ rp6502_asset(flappycoo XRAM(XRAM_LOGO) ${CMAKE_CURRENT_BINARY_DIR}/logo.bin)
 rp6502_asset(flappycoo XRAM(XRAM_PIPE_BODY) ${CMAKE_CURRENT_BINARY_DIR}/pipe_body.bin)
 rp6502_asset(flappycoo XRAM(XRAM_PIPE_CAP) ${CMAKE_CURRENT_BINARY_DIR}/pipe_cap.bin)
 rp6502_executable(flappycoo DATA default RESET default)
-rp6502_web(flappycoo PAGE web/index.html)
+rp6502_web(flappycoo CONFIG [[
+    title: 'Flappy Coo',
+    db: 'flappycoo',
+    footer: 'Space or click to flap, P to pause.',
+]])
 target_sources(flappycoo PRIVATE
     src/game.c
     src/input.c
@@ -104,19 +108,12 @@ target_sources(flappycoo PRIVATE
 )
 
 # Emulator scripts that play the game ROM
-# WSL uses the Windows build of the emulator, as the rest of the SDK does.
-# The Linux build needs GL, X11 and ALSA libraries that the WSL install
-# steps leave out.
-if(CMAKE_HOST_SYSTEM_VERSION MATCHES "[Mm]icrosoft")
-    set(emulator ${RP6502_TOOLS_DIR}/rp6502-emu.exe)
-else()
-    set(emulator ${RP6502_TOOLS_DIR}/rp6502-emu)
-endif()
 foreach(script keyboard tablet gamepad screenshots)
     add_test(NAME ${script}
-        COMMAND ${emulator}
+        COMMAND ${Python3_EXECUTABLE} ${RP6502_TOOLS_DIR}/rp6502.py
+            -c ${CMAKE_CURRENT_SOURCE_DIR}/.rp6502 execute
             --script ${CMAKE_CURRENT_SOURCE_DIR}/tests/${script}.script
-            --mute --seed 1 --save-dir ${CMAKE_CURRENT_BINARY_DIR}/save
+            --seed 1 --save-dir ${CMAKE_CURRENT_BINARY_DIR}/save
             ${CMAKE_CURRENT_BINARY_DIR}/flappycoo.rp6502
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )

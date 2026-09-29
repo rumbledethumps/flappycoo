@@ -49,7 +49,7 @@
         {
             "name": "llvm-mos/Release",
             "displayName": "llvm-mos/Release",
-            "description": "llvm-mos, optimized for size",
+            "description": "llvm-mos, optimized",
             "inherits": "base",
             "binaryDir": "${sourceDir}/build/llvm-mos/release",
             "cacheVariables": {

@@ -561,15 +561,22 @@ function(rp6502_hook_launch_json)
     if(NOT EXISTS "${file}")
         return()
     endif()
-    file(READ "${file}" json)
-    if(json MATCHES "RP6502 \\(Web\\)")
+    file(READ "${file}" before)
+    string(REPLACE "\"RP6502 (Emulator)\"" "\"RP6502-EMU\"" json "${before}")
+    string(REPLACE "\"RP6502 (Hardware)\"" "\"RP6502-PICO\"" json "${json}")
+    string(REPLACE "\"RP6502 (Web)\"" "\"RP6502-WEB\"" json "${json}")
+    if(NOT json STREQUAL before)
+        file(WRITE "${file}" "${json}")
+        message(STATUS "Renamed the entries of .vscode/launch.json")
+    endif()
+    if(json MATCHES "\"RP6502-WEB\"")
         return()
     endif()
     # Spliced as text, as in rp6502_hook_tasks_json(), at the end of the
     # configurations, so the entry selected for F5 stays the same.
     set(entry [==[
         {
-            "name": "RP6502 (Web)",
+            "name": "RP6502-WEB",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
@@ -581,14 +588,17 @@ function(rp6502_hook_launch_json)
         },
 ]==])
     # The bracket that closes the configurations, found by counting
-    # brackets outside strings and comments.
+    # brackets outside strings and comments. The entry goes after the last
+    # character outside comments, with a comma when that character closes
+    # an entry.
     set(end_at -1)
     string(FIND "${json}" "\"configurations\"" at)
     if(at GREATER_EQUAL 0)
         string(SUBSTRING "${json}" ${at} -1 tail)
         string(FIND "${tail}" "[" open_at)
         if(open_at GREATER_EQUAL 0)
-            math(EXPR i "${at} + ${open_at} + 1")
+            math(EXPR last_at "${at} + ${open_at}")
+            math(EXPR i "${last_at} + 1")
             string(LENGTH "${json}" length)
             set(depth 1)
             set(state code)
@@ -600,6 +610,7 @@ function(rp6502_hook_launch_json)
                         math(EXPR i "${i} + 1")
                     elseif(c STREQUAL "\"")
                         set(state code)
+                        set(last_at ${i})
                     endif()
                 elseif(state STREQUAL "line")
                     if(c STREQUAL "\n")
@@ -618,28 +629,36 @@ function(rp6502_hook_launch_json)
                     set(state block)
                 elseif(c STREQUAL "[")
                     math(EXPR depth "${depth} + 1")
+                    set(last_at ${i})
                 elseif(c STREQUAL "]")
                     math(EXPR depth "${depth} - 1")
                     if(depth EQUAL 0)
                         set(end_at ${i})
                         break()
                     endif()
+                    set(last_at ${i})
+                elseif(NOT c MATCHES "^[ \t\r\n]$")
+                    set(last_at ${i})
                 endif()
                 math(EXPR i "${i} + 1")
             endwhile()
         endif()
     endif()
     if(end_at LESS 0)
-        message(NOTICE "Add an \"RP6502 (Web)\" entry to .vscode/launch.json by hand.")
+        message(NOTICE "Add an \"RP6502-WEB\" entry to .vscode/launch.json by hand.")
         return()
     endif()
-    string(SUBSTRING "${json}" 0 ${end_at} head)
-    string(SUBSTRING "${json}" ${end_at} -1 rest)
-    string(REGEX REPLACE "[ \t\r\n]+$" "" head "${head}")
+    math(EXPR cut "${last_at} + 1")
+    string(SUBSTRING "${json}" 0 ${cut} head)
+    string(SUBSTRING "${json}" ${cut} -1 rest)
     if(head MATCHES "}$")
         string(APPEND head ",")
     endif()
-    file(WRITE "${file}" "${head}\n${entry}    ${rest}")
+    string(REGEX REPLACE "^[ \t]*\n" "" rest "${rest}")
+    if(rest MATCHES "^]")
+        string(PREPEND rest "    ")
+    endif()
+    file(WRITE "${file}" "${head}\n${entry}${rest}")
     message(STATUS "Added the web entry to .vscode/launch.json")
 endfunction()
 
@@ -689,32 +708,34 @@ endif()
 
 # BASIC is a language to CMake, so a BASIC program is an executable target
 # like a C one, and cmake.launchTargetPath in VS Code finds it the same way.
-if(RP6502_BASIC)
-    set(dir "${CMAKE_BINARY_DIR}/CMakeFiles/rp6502-basic")
-    file(WRITE "${dir}/CMakeDetermineBASICCompiler.cmake" [=[
+# Written for every project, because any project can list BASIC in
+# project() beside C and ASM.
+set(rp6502_basic_dir "${CMAKE_BINARY_DIR}/CMakeFiles/rp6502-basic")
+file(WRITE "${rp6502_basic_dir}/CMakeDetermineBASICCompiler.cmake" [=[
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(CMAKE_BASIC_COMPILER "${Python3_EXECUTABLE}")
 configure_file("${CMAKE_CURRENT_LIST_DIR}/CMakeBASICCompiler.cmake.in"
     "${CMAKE_PLATFORM_INFO_DIR}/CMakeBASICCompiler.cmake" @ONLY)
 set(CMAKE_BASIC_COMPILER_ENV_VAR "")
 ]=])
-    file(WRITE "${dir}/CMakeBASICCompiler.cmake.in" [=[
+file(WRITE "${rp6502_basic_dir}/CMakeBASICCompiler.cmake.in" [=[
 set(CMAKE_BASIC_COMPILER "@CMAKE_BASIC_COMPILER@")
 set(CMAKE_BASIC_COMPILER_LOADED 1)
-set(CMAKE_BASIC_SOURCE_FILE_EXTENSIONS bas;BAS)
+set(CMAKE_BASIC_SOURCE_FILE_EXTENSIONS "")
 set(CMAKE_BASIC_OUTPUT_EXTENSION .rp6502)
 set(CMAKE_BASIC_COMPILER_ENV_VAR "")
 ]=])
-    # The executable is an empty file. The ROM is <TARGET>.rp6502 beside it,
-    # the name a launch configuration makes from the target path, as for C.
-    file(WRITE "${dir}/CMakeBASICInformation.cmake"
-"set(CMAKE_BASIC_COMPILE_OBJECT \"<CMAKE_BASIC_COMPILER> \\\"${RP6502_TOOLS_DIR}/rp6502.py\\\" <FLAGS> -o <OBJECT> create <SOURCE>\")
-set(CMAKE_BASIC_LINK_EXECUTABLE \"<CMAKE_BASIC_COMPILER> \\\"${RP6502_TOOLS_DIR}/rp6502.py\\\" -o <TARGET>.rp6502 create <LINK_FLAGS> <OBJECTS>\" \"<CMAKE_COMMAND> -E touch <TARGET>\")
+# The executable is an empty file. The ROM is <TARGET>.rp6502 beside it,
+# the name a launch configuration makes from the target path, as for C.
+# BASIC comes first, so a help asset of the program replaces the help of
+# BASIC.
+file(WRITE "${rp6502_basic_dir}/CMakeBASICInformation.cmake"
+"set(CMAKE_BASIC_LINK_EXECUTABLE \"<CMAKE_BASIC_COMPILER> \\\"${RP6502_TOOLS_DIR}/rp6502.py\\\" -o <TARGET>.rp6502 create --replace help <LINK_FLAGS> <OBJECTS>\" \"<CMAKE_COMMAND> -E touch <TARGET>\")
 set(CMAKE_BASIC_INFORMATION_LOADED 1)
 ")
-    file(WRITE "${dir}/CMakeTestBASICCompiler.cmake" "set(CMAKE_BASIC_COMPILER_WORKS 1 CACHE INTERNAL \"\")\n")
-    list(APPEND CMAKE_MODULE_PATH "${dir}")
-endif()
+file(WRITE "${rp6502_basic_dir}/CMakeTestBASICCompiler.cmake" "set(CMAKE_BASIC_COMPILER_WORKS 1 CACHE INTERNAL \"\")\n")
+list(APPEND CMAKE_MODULE_PATH "${rp6502_basic_dir}")
+unset(rp6502_basic_dir)
 
 # cc65 links a flat image at a fixed address;
 # llvm-mos writes the address into the start of its output file.
@@ -869,7 +890,7 @@ function(rp6502_asset name)
     get_target_property(executable_called ${name} RP6502_EXECUTABLE_CALLED)
     if (executable_called)
         message(FATAL_ERROR
-            "rp6502_asset(${name} ...) must be registered BEFORE calling rp6502_executable()."
+            "rp6502_asset(${name} ...) must be registered BEFORE calling rp6502_executable() or rp6502_basic()."
         )
     endif()
     # CMake gives every parenthesis to a command as an argument of its own,
@@ -972,6 +993,7 @@ function(rp6502_asset name)
     set_property(TARGET ${name} APPEND PROPERTY
         RP6502_ASSET_ROMS "${out_file}"
     )
+    set_property(TARGET ${name} APPEND PROPERTY RP6502_ASSET_NAMES "${addr}")
 endfunction()
 
 # Package BASIC programs with BASIC.
@@ -979,14 +1001,16 @@ endfunction()
 # RP6502 BASIC
 # ^^^^^^^^^^^^
 #
-#  rp6502_basic(<name> [BASIC <spec>] <program>...)
+#  rp6502_basic(<name> [BASIC <spec>] [<autorun>])
 #
-# Builds <name>.rp6502 from BASIC with each program as a ROM asset under
-# its file name, and an executable target <name> that builds it. At
-# start, BASIC loads and runs the asset autorun.bas, written here to RUN
-# the first program, and one program starts another with
-# RUN "ROM:<file name>". The preset of a BASIC project sets RP6502_BASIC,
-# and the project calls project(<name> BASIC).
+# Builds <name>.rp6502 from BASIC and the assets of the executable target
+# <name>, which rp6502_asset() adds before this call, such as
+# rp6502_asset(<name> game.bas src/game.bas). <autorun> is the name of
+# the asset that BASIC runs at start, through an asset autorun.bas written
+# here; without it, BASIC starts at its prompt. One program starts another
+# with RUN "ROM:<name>". The project lists BASIC in project(). A project
+# with no compiler, such as project(<name> BASIC), sets RP6502_BASIC in
+# the configure preset.
 # ``BASIC <spec>`` names the BASIC ROM: owner/repo/ref, owner/repo (its
 # latest release), a ref of picocomputer/msbasic, or a .rp6502 file of
 # the project. The default is the latest release of picocomputer/msbasic.
@@ -994,8 +1018,16 @@ endfunction()
 function(rp6502_basic name)
     cmake_parse_arguments(PARSE_ARGV 1 arg "" "BASIC" "")
     set(caller "rp6502_basic(${name})")
-    if (NOT arg_UNPARSED_ARGUMENTS)
-        message(FATAL_ERROR "rp6502_basic(<name> [BASIC <spec>] <program>...)")
+    list(LENGTH arg_UNPARSED_ARGUMENTS count)
+    if (count GREATER 1 OR NOT TARGET ${name})
+        message(FATAL_ERROR
+            "rp6502_basic(<name> [BASIC <spec>] [<autorun>]), after add_executable(<name>) "
+            "and its rp6502_asset() calls")
+    endif()
+    if (NOT CMAKE_BASIC_COMPILER_LOADED)
+        message(FATAL_ERROR
+            "${caller}: BASIC is not a language of the project. List it in "
+            "project(), as in project(<name> BASIC) or project(<name> C ASM BASIC).")
     endif()
     # tools/basic.rp6502 was the BASIC of a project before specs. It is
     # never taken by default, so the configure stops for a project that
@@ -1011,34 +1043,26 @@ function(rp6502_basic name)
     # Rewritten only when BASIC changes, so a Makefile relinks for a new
     # BASIC that is older than the ROM.
     file(CONFIGURE OUTPUT "${dir}/basic.txt" CONTENT "${basic}\n")
-    list(GET arg_UNPARSED_ARGUMENTS 0 first)
-    get_filename_component(first "${first}" NAME)
-    string(TOUPPER "${first}" first)
-    # Written only when it changes, so a configure does not rebuild the ROM.
-    file(CONFIGURE OUTPUT "${dir}/autorun.bas"
-        CONTENT "10 RUN \"ROM:${first}\"\n")
-    set(programs ${arg_UNPARSED_ARGUMENTS} "${dir}/autorun.bas")
-    set(names)
-    set(sources)
-    foreach(program IN LISTS programs)
-        get_filename_component(src "${program}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-        get_filename_component(asset "${src}" NAME)
-        # rp6502.py takes a hex number or "file" after -a as an address,
-        # writes asset names in ASCII, and the ROM: drive ignores case.
-        string(TOUPPER "${asset}" key)
-        if (asset MATCHES "^(\\$?(0[xX])?[0-9A-Fa-f]+|[Ff][Ii][Ll][Ee])$"
-                OR NOT asset MATCHES "^[!-~]+$")
-            message(FATAL_ERROR "rp6502_basic(${name} ...): ${asset} cannot be an asset name.")
+    if (count EQUAL 1)
+        # The ROM: drive ignores case, and BASIC is written in capitals.
+        string(TOUPPER "${arg_UNPARSED_ARGUMENTS}" autorun)
+        get_target_property(names ${name} RP6502_ASSET_NAMES)
+        string(TOUPPER "${names}" names)
+        if (NOT autorun IN_LIST names)
+            message(FATAL_ERROR
+                "${caller}: no rp6502_asset(${name} ${arg_UNPARSED_ARGUMENTS} ...) "
+                "comes before it.")
         endif()
-        if (key IN_LIST names)
-            message(FATAL_ERROR "rp6502_basic(${name} ...): two programs are named ${key}.")
-        endif()
-        list(APPEND names "${key}")
-        set_source_files_properties("${src}" PROPERTIES
-            LANGUAGE BASIC COMPILE_OPTIONS "-a;${asset}")
-        list(APPEND sources "${src}")
-    endforeach()
-    add_executable(${name} ${sources})
+        # Written only when it changes, so a configure does not rebuild the ROM.
+        file(CONFIGURE OUTPUT "${dir}/autorun.bas" CONTENT "10 RUN \"ROM:${autorun}\"\n")
+        rp6502_asset(${name} autorun.bas "${dir}/autorun.bas")
+    endif()
+    get_target_property(assets ${name} RP6502_ASSET_ROMS)
+    if (NOT assets)
+        set(assets)
+    endif()
+    # As sources, the assets are built before the link that merges them.
+    target_sources(${name} PRIVATE ${assets})
     set(rom "${CMAKE_CURRENT_BINARY_DIR}/${name}.rp6502")
     set_target_properties(${name} PROPERTIES LINKER_LANGUAGE BASIC SUFFIX ""
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -1047,9 +1071,11 @@ function(rp6502_basic name)
         COMMAND "${CMAKE_COMMAND}" -E true
         BYPRODUCTS "${rom}"
         VERBATIM)
-    target_link_options(${name} PRIVATE "${basic}")
-    set_property(TARGET ${name} APPEND PROPERTY LINK_DEPENDS "${basic}" "${dir}/basic.txt")
+    target_link_options(${name} PRIVATE "${basic}" ${assets})
+    set_property(TARGET ${name} APPEND PROPERTY LINK_DEPENDS
+        "${basic}" "${dir}/basic.txt" ${assets})
     set_target_properties(${name} PROPERTIES
+        RP6502_EXECUTABLE_CALLED TRUE
         RP6502_ROM "${rom}"
         RP6502_ROM_TARGET ${name})
 endfunction()
@@ -1074,7 +1100,9 @@ endfunction()
 # index.html is the page. Without one, the page is the index.html of the
 # web zip. CONFIG is JavaScript, the keys and values of an object: its
 # keys replace the same keys in CONFIG of the page, and add the others.
-# CONFIG.rom is always the ROM.
+# CONFIG.rom is always the ROM, and CONFIG.github, for the links under a
+# footer, is the GitHub repository of the git remote origin unless CONFIG
+# names another.
 #
 function(rp6502_web rom)
     cmake_parse_arguments(PARSE_ARGV 1 arg "" "OUTPUT;EMULATOR;PAGE;CONFIG" "")
@@ -1163,6 +1191,14 @@ function(rp6502_web rom)
     set(script "<script>\n")
     if (page STREQUAL "${dir}/emulator/index.html")
         string(APPEND script "CONFIG.title = '';\n")
+    endif()
+    # The footer links to the GitHub repository that the git remote of the
+    # project names; CONFIG can name another.
+    execute_process(COMMAND git -C "${CMAKE_SOURCE_DIR}" remote get-url origin
+        OUTPUT_VARIABLE origin OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if (origin MATCHES "github\\.com[:/]([^/]+/[^/]+)$")
+        string(REGEX REPLACE "\\.git$" "" repo "${CMAKE_MATCH_1}")
+        string(APPEND script "CONFIG.github = '${repo}';\n")
     endif()
     if (DEFINED arg_CONFIG)
         string(APPEND script "Object.assign(CONFIG, {\n${arg_CONFIG}\n});\n")
