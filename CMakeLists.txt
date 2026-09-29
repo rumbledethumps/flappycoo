@@ -97,6 +97,7 @@ rp6502_executable(flappycoo DATA default RESET default)
 rp6502_web(flappycoo CONFIG [[
     title: 'Flappy Coo',
     db: 'flappycoo',
+    overlay = '',
     footer: 'Space or click to flap, P to pause.',
 ]])
 target_sources(flappycoo PRIVATE
