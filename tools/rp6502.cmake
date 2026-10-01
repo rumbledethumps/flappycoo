@@ -815,10 +815,27 @@ function(rp6502_executable name)
             list(APPEND all_extra_roms "${CMAKE_CURRENT_SOURCE_DIR}/${rom}")
         endif()
     endforeach()
-    # Collect asset ROMs registered by rp6502_asset()
+    # Collect asset ROMs registered by rp6502_asset(). An asset made from a
+    # file that this target's own link writes is made after the link.
     get_target_property(asset_roms ${name} RP6502_ASSET_ROMS)
+    get_target_property(byproducts ${name} RP6502_BYPRODUCTS)
+    set(pre_link)
+    set(post_link)
+    set(post_link_roms)
     if (asset_roms)
         list(APPEND all_extra_roms ${asset_roms})
+        set(index 0)
+        foreach(rom IN LISTS asset_roms)
+            get_target_property(src ${name} RP6502_ASSET_SRC_${index})
+            if (byproducts AND src IN_LIST byproducts)
+                get_target_property(cmd ${name} RP6502_ASSET_CMD_${index})
+                list(APPEND post_link ${cmd})
+                list(APPEND post_link_roms "${rom}")
+            else()
+                list(APPEND pre_link "${rom}")
+            endif()
+            math(EXPR index "${index} + 1")
+        endforeach()
     endif()
     # Build the rp6502.py merge command
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -847,26 +864,27 @@ function(rp6502_executable name)
         create ${executable_inputs}
         -- ${all_extra_roms}
     )
-    # The ROM is its own buildable artifact, depending on the executable
-    # (when DATA is given) plus every asset rom.
-    add_custom_command(
-        OUTPUT "${rom_file}"
-        DEPENDS ${executable_inputs} ${all_extra_roms}
+    # The target writes the ROM after it links, so building the target, by
+    # any name a user picks, builds the ROM. As sources, the assets are built
+    # before the link, and a changed asset links again.
+    if (pre_link)
+        target_sources(${name} PRIVATE ${pre_link})
+    endif()
+    if (post_link_roms)
+        list(REMOVE_ITEM all_extra_roms ${post_link_roms})
+    endif()
+    set_property(TARGET ${name} APPEND PROPERTY LINK_DEPENDS ${all_extra_roms})
+    add_custom_command(TARGET ${name} POST_BUILD
+        ${post_link}
         COMMAND ${CMAKE_COMMAND} -E rm -f "${rom_file}"
         COMMAND ${tool_command}
+        BYPRODUCTS "${rom_file}" ${post_link_roms}
         VERBATIM
     )
-    add_custom_target(${name}_rp6502 ALL DEPENDS "${rom_file}")
-    # A layout that fails its checks must not produce a ROM.
-    get_target_property(map_checks ${name} RP6502_MAP_CHECKS)
-    if (map_checks)
-        add_dependencies(${name}_rp6502 ${map_checks})
-    endif()
     # Mark that rp6502_executable has been called for this target
-    set_property(TARGET ${name} PROPERTY RP6502_EXECUTABLE_CALLED TRUE)
     set_target_properties(${name} PROPERTIES
-        RP6502_ROM "${rom_file}"
-        RP6502_ROM_TARGET ${name}_rp6502)
+        RP6502_EXECUTABLE_CALLED TRUE
+        RP6502_ROM "${rom_file}")
 endfunction()
 
 # Package anything as an RP6502 asset ROM.
@@ -975,21 +993,36 @@ function(rp6502_asset name)
                 -a "${addr}"
                 -o "${out_file}"
                 create "${src_file}")
+    set(checks)
     # The configure has to finish for the build to report why the address
-    # was not read, so the refusal waits for the build too.
+    # was not read, so the refusal waits for the build too. It also waits
+    # for the checks, which report the reason against the line in the
+    # header, so it runs only once the header compiles again.
     if (unread)
+        get_property(checks TARGET ${name} PROPERTY RP6502_MAP_CHECKS)
         set(create
             COMMAND ${CMAKE_COMMAND} -E echo
-                "rp6502_asset(${name} ${form}(${token})): rp6502_map() did not read this address, or it does not fit in 16 bits."
+                "rp6502_asset(${name} ${form}(${token})): rp6502_map() did not read this address when CMake last configured. Configure again."
             COMMAND ${CMAKE_COMMAND} -E false)
     endif()
+    set(create COMMAND ${CMAKE_COMMAND} -E make_directory "${out_dir}" ${create})
     add_custom_command(
         OUTPUT "${out_file}"
-        DEPENDS "${src_file}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${out_dir}"
+        DEPENDS "${src_file}" ${checks}
         ${create}
         VERBATIM
     )
+    # An asset listed as a source of its target is never compiled, whatever
+    # its name.
+    set_source_files_properties("${out_file}" PROPERTIES HEADER_FILE_ONLY TRUE)
+    get_target_property(roms ${name} RP6502_ASSET_ROMS)
+    list(LENGTH roms index)
+    if (NOT roms)
+        set(index 0)
+    endif()
+    set_target_properties(${name} PROPERTIES
+        RP6502_ASSET_SRC_${index} "${src_file}"
+        RP6502_ASSET_CMD_${index} "${create}")
     set_property(TARGET ${name} APPEND PROPERTY
         RP6502_ASSET_ROMS "${out_file}"
     )
@@ -1076,8 +1109,7 @@ function(rp6502_basic name)
         "${basic}" "${dir}/basic.txt" ${assets})
     set_target_properties(${name} PROPERTIES
         RP6502_EXECUTABLE_CALLED TRUE
-        RP6502_ROM "${rom}"
-        RP6502_ROM_TARGET ${name})
+        RP6502_ROM "${rom}")
 endfunction()
 
 # Package a ROM as a web page.
@@ -1114,7 +1146,6 @@ function(rp6502_web rom)
     endif()
     if (TARGET ${rom})
         get_target_property(rom_file ${rom} RP6502_ROM)
-        get_target_property(rom_target ${rom} RP6502_ROM_TARGET)
     endif()
     if (NOT rom_file)
         message(FATAL_ERROR
@@ -1129,9 +1160,11 @@ function(rp6502_web rom)
         message(FATAL_ERROR "${caller}: OUTPUT ${zip} is not a file name ending in .zip.")
     endif()
     string(REGEX REPLACE "\\.zip$" "" name "${zip}")
-    if (TARGET ${name}_web)
+    get_property(zips GLOBAL PROPERTY RP6502_WEB_ZIPS)
+    if (zip IN_LIST zips)
         message(FATAL_ERROR "${caller}: two rp6502_web() calls make ${zip}.")
     endif()
+    set_property(GLOBAL APPEND PROPERTY RP6502_WEB_ZIPS "${zip}")
     set(spec "${arg_EMULATOR}")
     if (RP6502_WEB_EMULATOR)
         set(spec "${RP6502_WEB_EMULATOR}")
@@ -1227,9 +1260,11 @@ function(rp6502_web rom)
     if (folder)
         set(copy_folder COMMAND "${CMAKE_COMMAND}" -E copy_directory "${folder}" "${stage}")
     endif()
-    add_custom_command(
-        OUTPUT "${out}/${zip}"
-        DEPENDS "${rom_file}" "${dir}/index.html" "${dir}/sources.txt" ${folder_files}
+    # Packaged after the ROM target links, so building that target builds
+    # the zip as well. A changed page links it again.
+    set_property(TARGET ${rom} APPEND PROPERTY LINK_DEPENDS
+        "${dir}/index.html" "${dir}/sources.txt" ${folder_files})
+    add_custom_command(TARGET ${rom} POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E rm -rf "${stage}" "${out}/${zip}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${stage}"
         ${copy_folder}
@@ -1240,11 +1275,10 @@ function(rp6502_web rom)
         COMMAND "${CMAKE_COMMAND}" -E chdir "${stage}"
             "${CMAKE_COMMAND}" -E tar cf "${out}/${zip}" --format=zip --
             index.html rp6502.js rp6502.wasm ${rom}.rp6502 ${folder_entries}
+        BYPRODUCTS "${out}/${zip}"
         COMMENT "Packaging web/${zip}"
         VERBATIM
     )
-    add_custom_target(${name}_web ALL DEPENDS "${out}/${zip}")
-    add_dependencies(${name}_web ${rom_target})
 endfunction()
 
 # Give CMake the addresses a header defines.
@@ -1308,6 +1342,7 @@ function(rp6502_map target)
     string(REPLACE "\r\n" "\n" rest "${rest}")
     set(names)
     set(lines)
+    set(columns)
     set(values)
     set(lineno 0)
     set(pending "")
@@ -1339,14 +1374,16 @@ function(rp6502_map target)
             set(pending_line ${cur_line})
         else()
             set(pending "")
-            if (cur MATCHES "^[ \t]*#[ \t]*define[ \t]+([A-Za-z_][A-Za-z0-9_]*)([^A-Za-z0-9_(].*)$")
-                set(name "${CMAKE_MATCH_1}")
-                string(STRIP "${CMAKE_MATCH_2}" value)
+            if (cur MATCHES "^([ \t]*#[ \t]*define[ \t]+)([A-Za-z_][A-Za-z0-9_]*)([^A-Za-z0-9_(].*)$")
+                string(LENGTH "${CMAKE_MATCH_1}" column)
+                set(name "${CMAKE_MATCH_2}")
+                string(STRIP "${CMAKE_MATCH_3}" value)
                 # An include guard has no value and only integers are carried.
                 if (NOT value STREQUAL "" AND NOT value MATCHES "^[\"']"
                         AND name MATCHES "^(${regex})$")
                     list(APPEND names "${name}")
                     list(APPEND lines "${cur_line}")
+                    list(APPEND columns "${column}")
                     list(APPEND values "${value}")
                 endif()
             endif()
@@ -1382,43 +1419,55 @@ function(rp6502_map target)
     # with the same file name, so the files are kept apart by both.
     file(RELATIVE_PATH id "${CMAKE_SOURCE_DIR}" "${header_file}")
     if (id MATCHES "^\\.\\.")
-        # A whole absolute path would push the ROM path past what the
-        # emulator opens.
+        # A name built from the whole path could make a path in the build
+        # folder longer than the 260 characters that Windows allows.
         get_filename_component(stem "${header_file}" NAME_WE)
         string(SHA1 hash "${header_file}")
         string(SUBSTRING "${hash}" 0 8 hash)
         set(id "${stem}_${hash}")
     endif()
     string(MAKE_C_IDENTIFIER "${id}" id)
-    if (TARGET ${target}_map_${id})
+    set(dir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${target}.map/${id}")
+    set(stamp "${dir}/map_check.stamp")
+    get_property(checks TARGET ${target} PROPERTY RP6502_MAP_CHECKS)
+    if (stamp IN_LIST checks)
         message(FATAL_ERROR
             "rp6502_map(${target} ${header}): ${header} is already mapped for ${target}.")
     endif()
-    set(dir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${target}.map/${id}")
     string(REPLACE "\\" "/" header_c "${header_file}")
 
-    # A program that prints the values. Everything is unsigned long, so
-    # neither compiler's 16 bit size_t truncates what it prints. Included by
-    # name with -I below, because cc65 cannot find a quoted include given as
-    # an absolute path.
-    set(stub "#include <stdio.h>\n#include \"${header_name}\"\n\nint main(void)\n{\n")
-    foreach(name line IN ZIP_LISTS names lines)
+    # One constant per define, compiled to assembly and never run, so the
+    # compiler lays out the structures as in the program, the read needs no
+    # emulator, and only the header can make the read fail. The constants
+    # are numbered rather than named, because cc65 cuts an identifier at 64
+    # characters. Everything is unsigned long, because size_t is 16 bits
+    # with both compilers and would truncate a value. Included by name with
+    # -I below, because cc65 cannot find a quoted include given as an
+    # absolute path. The stub and the check start with the same includes,
+    # so a header that passes the check is also read.
+    set(prelude "#include <stddef.h>\n#include \"${header_name}\"\n")
+    set(stub "${prelude}")
+    set(index 0)
+    foreach(name IN LISTS names)
         string(APPEND stub
-            "#ifdef ${name}\n"
-            "#line ${line} \"${header_c}\"\n"
-            "    printf(\"${name} 0x%lX\\n\", (unsigned long)${name});\n"
+            "\n#ifdef ${name}\n"
+            "const unsigned long _map_${index} = (unsigned long)(${name});\n"
             "#endif\n")
+        math(EXPR index "${index} + 1")
     endforeach()
-    string(APPEND stub "    return 0;\n}\n")
-    file(WRITE "${dir}/map_stub.c" "${stub}")
 
     # A program of assertions, compiled but never run, so the compiler
     # reports a bad layout against the line in the header. Every name gets a
     # line of its own, since a name with no assertion would let a define
-    # that will not compile through. Each declaration is one line, because
-    # cc65 reports the line it finished reading rather than the one it
-    # started on.
-    set(check "#include <stddef.h>\n#include \"${header_name}\"\n\n")
+    # that will not compile through. Each condition sits on a line numbered
+    # as the define, indented to the column of its name, so a compiler that
+    # reports a column marks the name. The declaration ends on that line,
+    # because cc65 reports the line it finished reading rather than the one
+    # it started on.
+    set(check "${prelude}\n")
+    string(APPEND check
+        "#define _map_fits(x) ((unsigned long)(x) < 0x10000UL)\n"
+        "#define _map_even(x) (!((x) & 1))\n")
     string(APPEND check
         "/* size_t is 16 bits, so a structure larger than 64K wraps instead of\n"
         "   being refused. An array of one is refused outright, because the\n"
@@ -1435,28 +1484,46 @@ function(rp6502_map target)
     # An offset and arithmetic between offsets are size_t, so 16 bits, and
     # can never trip this. A number that does not fit is a long and does,
     # and so does a negative one, which the cast makes large.
-    foreach(name line IN ZIP_LISTS names lines)
+    foreach(name line column IN ZIP_LISTS names lines columns)
+        string(REPEAT " " ${column} indent)
         string(APPEND check
-            "\n#ifdef ${name}\n#line ${line} \"${header_c}\"\n"
-            "_Static_assert((unsigned long)(${name}) < 0x10000UL,"
-            " \"${name} does not fit in 16 bits.\");\n")
+            "\n#ifdef ${name}\n_Static_assert(\n#line ${line} \"${header_c}\"\n"
+            "${indent}_map_fits(${name}), \"${name} does not fit in 16 bits.\");\n")
         if (NOT unaligned OR NOT name MATCHES "^(${unaligned})$")
             string(APPEND check
-                "#line ${line} \"${header_c}\"\n"
-                "_Static_assert(!((${name}) & 1), \"${name} is unaligned."
+                "_Static_assert(\n#line ${line} \"${header_c}\"\n"
+                "${indent}_map_even(${name}), \"${name} is unaligned."
                 " To allow, use the [<unaligned_regex>] in rp6502_map.\");\n")
         endif()
         string(APPEND check "#endif\n")
     endforeach()
-    file(WRITE "${dir}/map_check.c" "${check}")
+    # Both programs are written only when they change, so a configure alone
+    # does not run the check and the link again. The check depends instead
+    # on every header that the stub includes. file(CONFIGURE) is not used,
+    # because it would replace an @name@ in the path of the header.
+    foreach(part stub check)
+        file(WRITE "${dir}/map_${part}.new" "${${part}}")
+        file(COPY_FILE "${dir}/map_${part}.new" "${dir}/map_${part}.c" ONLY_IF_DIFFERENT)
+    endforeach()
 
-    # cc65's CMAKE_C_COMPILER is a wrapper around cl65 that puts diagnostics
-    # in the form an IDE matches, so both programs are built through it.
+    # With cc65, CMAKE_C_COMPILER is a wrapper around cl65 that writes
+    # diagnostics in the form an IDE matches, so the check is built through
+    # it. The stub is compiled by cl65 directly, because CMake 3.21 reads a
+    # -S after -P as an option of CMake. Only the file names in diagnostics
+    # from the stub are used.
     set(compiler_args)
+    set(asm_flags -S)
     if (CMAKE_C_COMPILER_ID STREQUAL "cc65")
         set(compiler_args -P "${RP6502_TOOLS_DIR}/cc65-toolchain.cmake" -- "${CC65_C_COMPILER}")
-    elseif (CMAKE_C_COMPILER_ARG1)
-        separate_arguments(compiler_args NATIVE_COMMAND "${CMAKE_C_COMPILER_ARG1}")
+        set(stub_compiler "${CC65_C_COMPILER}")
+    else()
+        if (CMAKE_C_COMPILER_ARG1)
+            separate_arguments(compiler_args NATIVE_COMMAND "${CMAKE_C_COMPILER_ARG1}")
+        endif()
+        set(stub_compiler "${CMAKE_C_COMPILER}" ${compiler_args})
+        # llvm-mos compiles to LTO bitcode by default, which -S writes as
+        # LLVM IR instead of assembly.
+        list(PREPEND asm_flags -fno-lto)
     endif()
     separate_arguments(flags NATIVE_COMMAND "${CMAKE_C_FLAGS}")
     # clang does not escape spaces in the -MT target, so the target is a
@@ -1467,8 +1534,8 @@ function(rp6502_map target)
 
     set(failed FALSE)
     execute_process(
-        COMMAND "${CMAKE_C_COMPILER}" ${compiler_args} ${flags} -I "${header_dir}"
-                ${dep_flags} -o "${dir}/map_stub" "${dir}/map_stub.c"
+        COMMAND ${stub_compiler} ${flags} -I "${header_dir}"
+                ${dep_flags} ${asm_flags} -o "${dir}/map_stub.s" "${dir}/map_stub.c"
         WORKING_DIRECTORY "${dir}"
         RESULT_VARIABLE result
         OUTPUT_VARIABLE output
@@ -1482,7 +1549,9 @@ function(rp6502_map target)
     # the stub includes has to configure the project again, not only a
     # change to the named one. The list is read after a failed compile too,
     # so fixing an included header configures again. A failed cc65 compile
-    # keeps the previous list, which can name a header that no longer exists.
+    # writes no list and keeps the previous one, which can name a header
+    # that no longer exists.
+    set(headers)
     if (EXISTS "${dir}/map_stub.d")
         file(READ "${dir}/map_stub.d" deps)
         # Make syntax, where a name that ends in a colon is a target.
@@ -1497,58 +1566,54 @@ function(rp6502_map target)
             string(REPLACE "$$" "$" dep "${dep}")
             cmake_path(ABSOLUTE_PATH dep BASE_DIRECTORY "${dir}" NORMALIZE)
             if (EXISTS "${dep}")
-                set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${dep}")
+                list(APPEND headers "${dep}")
             endif()
         endforeach()
     endif()
-
-    if (NOT failed)
-        rp6502_default_address(load_addr)
-        find_package(Python3 REQUIRED COMPONENTS Interpreter)
-        execute_process(
-            COMMAND "${Python3_EXECUTABLE}" "${RP6502_TOOLS_DIR}/rp6502.py"
-                    -a "${load_addr}" -r "${load_addr}"
-                    -o "${dir}/map_stub.rp6502" create "${dir}/map_stub"
-            RESULT_VARIABLE result
-            OUTPUT_VARIABLE output
-            ERROR_VARIABLE output
-        )
-        if (NOT result EQUAL 0)
-            set(failed TRUE)
-        endif()
+    # The previous list lacks any header included since the last compile
+    # that succeeded, so after a failed compile the configure also depends
+    # on each file named at the start of an error line, where both compilers
+    # write the file and the line number.
+    if (failed)
+        string(REGEX MATCHALL "\n([A-Za-z]:)?[^: \n][^:\n]*:[0-9]+:" named "\n${output}")
+        foreach(file IN LISTS named)
+            string(REGEX REPLACE "^\n(.*):[0-9]+:$" "\\1" file "${file}")
+            cmake_path(ABSOLUTE_PATH file BASE_DIRECTORY "${dir}" NORMALIZE)
+            if (EXISTS "${file}")
+                list(APPEND headers "${file}")
+            endif()
+        endforeach()
     endif()
-
-    if (NOT failed)
-        execute_process(
-            COMMAND "${Python3_EXECUTABLE}" "${RP6502_TOOLS_DIR}/rp6502.py"
-                    -c "${RP6502_PROJECT_DIR}/.rp6502"
-                    execute "${dir}/map_stub.rp6502"
-            TIMEOUT 60
-            RESULT_VARIABLE result
-            OUTPUT_VARIABLE output
-            ERROR_VARIABLE output
-        )
-        if (NOT result EQUAL 0)
-            set(failed TRUE)
-        endif()
-    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${headers})
 
     # A failure here is the header's, and the build reports it in full, so
     # the configure finishes with every address unread rather than leaving
     # the project unconfigured. Unread is 0xFFFFFFFF, which RAM() and
     # XRAM() refuse and rp6502.py cannot place, so no ROM is built from it.
-    string(REPLACE "\r" "" output "${output}")
+    set(asm)
+    if (NOT failed)
+        file(READ "${dir}/map_stub.s" asm)
+        string(REPLACE "\r" "" asm "${asm}")
+    endif()
+    set(index -1)
     foreach(name IN LISTS names)
+        math(EXPR index "${index} + 1")
         set(found "")
         if (failed)
             set(found 0xFFFFFFFF)
-        elseif (output MATCHES "(^|\n)${name} (0x[0-9A-Fa-f]+)")
-            # Out of range is unread while the build reports it against the
-            # header.
-            set(found "${CMAKE_MATCH_2}")
-            math(EXPR numeric "${found}")
-            if (numeric GREATER 65535)
-                set(found 0xFFFFFFFF)
+        elseif (asm MATCHES "(^|\n)_?_map_${index}:")
+            # A value that is not a plain number, or that does not fit in
+            # 16 bits, is unread while the build reports it against the
+            # header. cc65 puts an underscore in front of a C name and
+            # writes $-prefixed hex in a .dword, where llvm-mos writes
+            # decimal in a .long.
+            set(found 0xFFFFFFFF)
+            if (asm MATCHES "(^|\n)_?_map_${index}:[ \t]*\n[ \t]*\\.(dword|long)[ \t]+(\\$[0-9A-Fa-f]+|[0-9]+)")
+                string(REPLACE "$" "0x" value "${CMAKE_MATCH_3}")
+                math(EXPR value "${value}")
+                if (value LESS 65536)
+                    math(EXPR found "${value}" OUTPUT_FORMAT HEXADECIMAL)
+                endif()
             endif()
         endif()
         # A name the preprocessor skipped is not a name at all.
@@ -1570,33 +1635,30 @@ function(rp6502_map target)
         endif()
         set_property(TARGET ${target} PROPERTY RP6502_MAP_NAME_${name} "${found}")
     endforeach()
-    # A header that will not compile is reported by the compile below, but a
-    # tool that did not run leaves a header that compiles and nothing to
-    # report. So the reason is carried to the build and fails it.
-    set(unread)
     if (failed)
         message(STATUS "rp6502_map(${target} ${header}) read no addresses; the build reports why.")
-        file(WRITE "${dir}/map_unread.txt"
-            "rp6502_map(${target} ${header}) read no addresses. Configure again once"
-            " this is fixed.\n${output}\n")
-        set(unread
-            COMMAND "${CMAKE_COMMAND}" -E cat "${dir}/map_unread.txt"
-            COMMAND "${CMAKE_COMMAND}" -E false)
+        # Without a stamp, the check runs and reports the reason even when
+        # no file that it depends on is newer, as after an included header
+        # was deleted.
+        file(REMOVE "${stamp}")
     endif()
 
-    set(map_check "${target}_map_${id}")
+    # The check is a source of the target and an input of the link, so a
+    # layout that fails the check produces no ROM, and an IDE lists no
+    # separate target for the check.
     add_custom_command(
-        OUTPUT "${dir}/map_check.stamp"
-        DEPENDS "${header_file}" "${dir}/map_check.c"
+        OUTPUT "${stamp}"
+        DEPENDS "${header_file}" "${dir}/map_check.c" ${headers}
         COMMAND "${CMAKE_C_COMPILER}" ${compiler_args} ${flags} -I "${header_dir}"
                 -c -o "${dir}/map_check.o" "${dir}/map_check.c"
-        ${unread}
-        COMMAND "${CMAKE_COMMAND}" -E touch "${dir}/map_check.stamp"
+        COMMAND "${CMAKE_COMMAND}" -E touch "${stamp}"
         COMMENT "Checking ${header_name}"
         VERBATIM
     )
-    add_custom_target(${map_check} ALL DEPENDS "${dir}/map_check.stamp")
-    set_property(TARGET ${target} APPEND PROPERTY RP6502_MAP_CHECKS "${map_check}")
+    set_source_files_properties("${stamp}" PROPERTIES HEADER_FILE_ONLY TRUE)
+    target_sources(${target} PRIVATE "${stamp}")
+    set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS "${stamp}")
+    set_property(TARGET ${target} APPEND PROPERTY RP6502_MAP_CHECKS "${stamp}")
 endfunction()
 
 # Declare files as byproducts of building <target>.
@@ -1616,4 +1678,8 @@ function(rp6502_byproducts target)
         COMMAND ${CMAKE_COMMAND} -E touch_nocreate ${ARGN}
         VERBATIM
     )
+    foreach(file IN LISTS ARGN)
+        get_filename_component(file "${file}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+        set_property(TARGET ${target} APPEND PROPERTY RP6502_BYPRODUCTS "${file}")
+    endforeach()
 endfunction()
