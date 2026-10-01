@@ -2,10 +2,11 @@
 
 Flappy Coo is a Flappy Bird game for the
 [Picocomputer 6502](https://picocomputer.github.io), with a highland cow, a
-"coo", in place of the bird. The game is small, but each part of a full
+"coo", in place of the bird. The game is small, and each part of a full
 game is in it: screens, a saved best score, animated sprites, scrolling
-tiles, a bitmap, text, sound and three kinds of input. Copy it to start a
-game of your own. It builds with either 6502 compiler, cc65 or llvm-mos.
+tiles, a bitmap, text, sound and three kinds of input. Study it before
+creating a game of your own. It builds with either 6502 compiler, cc65 or
+llvm-mos.
 
 <!-- rp6502
 preset: llvm-mos/Release
@@ -24,49 +25,10 @@ Flap through the gaps between the pipes. Each pipe passed scores a point.
 | Flap, start | Space or Enter | click or tap | A, B, X or Y |
 | Pause | P | right click | Start |
 
-The screen and the help text name only Space, click, P and right click.
+## Building
 
-Flappy Coo needs version 0.34 or newer of the Picocomputer firmware or the
-emulator. Custom-size sprites and the `SAVE:` drive are new in 0.34.
-
-## Requirements
-
- * CMake 3.21 or newer
- * Python 3
- * Make or Ninja
- * [cc65 or llvm-mos](https://github.com/picocomputer?view_as=public).
- * gcc for your computer, to run the unit tests there. On Windows, install
-   it with `winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT` and
-   open a new terminal. The `host` preset names gcc, because the llvm-mos
-   `bin` folder contains a clang that builds only 6502 programs.
-
-The install steps for Windows, macOS and Linux are in
-[RP6502-SDK](https://picocomputer.github.io/sdk.html#sdk-install), along with
-the rest of the SDK documentation.
-
-## Building and running
-
-In VS Code, choose a preset and press F5, as
-[Getting Started](https://picocomputer.github.io/sdk.html#getting-started)
-describes.
-
-On the command line:
-
-```bash
-$ cmake --preset cc65/Release
-$ cmake --build --preset cc65/Release
-$ tools/rp6502-emu build/cc65/release/flappycoo.rp6502
-```
-
-On Windows and WSL the emulator is `tools/rp6502-emu.exe`. The first
-configure downloads the emulator into `tools/`, so a fresh clone needs a
-network connection once.
-
-The two ROMs hold the same image data and help text and differ only in the
-program. Both pass the same emulator scripts and produce identical
-screenshots, so CI releases the smaller ROM. The sizes change with each
-code edit and compiler update, so they are not listed here. The job
-summary of each CI run lists both.
+To learn the tools that Flappy Coo is built with, read the
+[SDK](https://picocomputer.github.io/sdk.html) documentation.
 
 ## Where each part is
 
@@ -103,14 +65,20 @@ in each plane the sprite layer is drawn over the fill layer.
 
 ## Images
 
-The build converts the PNGs in the table below with `img/png2bin.py`,
-which needs only Python 3. `CMakeLists.txt` holds one
-`add_custom_command()` per PNG, so a new PNG in `img/` is converted only
-after a command is added for it. `rp6502_asset()` adds each converted file
-that the game uses to the ROM with an XRAM address, and the files are
-loaded into XRAM before the 6502 starts. The program has no loading code,
-and no image passes through 6502 RAM.
-[Adding Assets](https://picocomputer.github.io/sdk.html#sdk-assets)
+Each image must be in XRAM in the exact format of the VGA mode that draws
+it. The modes that Flappy Coo uses take packed pixels for sprites and
+bitmaps, 8x8 tiles with a map of tile numbers, and palettes of RGB555
+colors. Any tool that produces those bytes works. An indexed-color PNG is
+the easiest source to convert, because each pixel is already a palette
+index, as in those formats. `img/png2bin.py` is a small converter written
+for this game, and it handles only those formats. See
+[Colors, Palettes and Fonts](https://picocomputer.github.io/vga.html#colors-palettes-and-fonts).
+
+`CMakeLists.txt` runs the converter with one `add_custom_command()` for
+each PNG in the table below. `rp6502_asset()` adds each converted file that the game uses to the
+ROM with an XRAM address, and the files are loaded into XRAM before the
+6502 starts. The program has no loading code, and no image passes through
+6502 RAM. [Adding Assets](https://picocomputer.github.io/sdk.html#sdk-assets)
 explains `rp6502_asset()`.
 
 | Image | png2bin.py command | XRAM data | Sizes in the code |
@@ -125,33 +93,20 @@ explains `rp6502_asset()`.
 `concept.png` is the concept art that the coo frames and the logo were cut
 from. The build does not use it.
 
-Each converted PNG must be:
-
- * indexed color (a palette image), not interlaced, at 1, 2, 4 or 8 bits
-   per pixel;
- * saved with at most 2^bpp palette entries, 16 at 4 bpp or 256 at 8 bpp,
-   which is the size of the matching palette in `src/xram.h`;
- * transparent at index 0, with alpha 0. An entry with alpha below 128
-   becomes the color 0x0000, which the VGA draws as transparent;
- * a whole number of frames for `sprite`, each frame 4 to 64 pixels wide
-   and high in steps of 4, or a multiple of 8 pixels with at most 256
-   different tiles for `tiles`;
- * for `sky.png` and `ground.png`, a power-of-two number of tiles wide (64
-   and 8 now), because the scroll positions wrap with a mask.
-
-The converter stops the build with a message when an image is not
-indexed, is interlaced, has more colors or tiles than fit, or is not a
-whole number of frames, or when a sprite frame size is not 4 to 64 pixels
-in steps of 4. The compiler stops the build when `SKY_MAP_W` or
-`GROUND_MAP_W` in `src/xram.h` is not a power of two. Colors are RGB555,
-so the lowest 3 bits of each red, green and blue value are dropped. See
-[Colors, Palettes and Fonts](https://picocomputer.github.io/vga.html#colors-palettes-and-fonts).
-
 The sizes in the last column of the table above are not read from the
 PNGs, and no check compares the two. When a size does not match the PNG,
 the game draws garbage and the tests still pass. Data larger than the
 space for it in `xram_layout_t` usually stops the build with "ROM data
 already exists at $...", where the address is that of the data after it.
+
+## RAM layout
+
+The compiler manages the 6502 RAM with a linker script that lays out zero
+page and the rest of RAM, and the program sets no RAM addresses. The
+images, the text and the device data are in XRAM, so RAM holds only the
+program code, the variables and the stacks. The layout needs no attention
+until the code and variables no longer fit in RAM. See
+[Memory Map](https://picocomputer.github.io/sdk.html#sdk-memory-map).
 
 ## XRAM layout
 
@@ -185,7 +140,11 @@ The layout uses 54312 bytes and leaves 11224 free.
 | `keyboard`, `tablet`, `gamepad` | Each device starts a game, pauses it, resumes it and pauses it again, and the canvas stays still while paused. A tablet pointer that only hovers does not start a game. | cc65, llvm-mos |
 | `screenshots` | Writes `title.png`, `play.png`, `paused.png` and `over.png` into the build directory. | cc65, llvm-mos |
 
-The host tests:
+The host tests need gcc for your computer. On Windows, install it with
+`winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT` and open a new
+terminal. The `host` preset names gcc, because the llvm-mos `bin` folder
+contains a clang that builds only 6502 programs. Build and run the host
+tests with:
 
 ```bash
 $ cmake --preset host
@@ -205,7 +164,14 @@ buttons, run frames, and compare the canvas. They run with `--seed 1`, so
 every run is the same. [Scripting](https://picocomputer.github.io/emu.html#scripting)
 lists the commands.
 
-## CI
+## Automation
+
+Continuous integration (CI) means that each time the repository is
+updated, a server builds and tests the project and makes the release
+files, the same way every time. A change that breaks the build or a test
+is found right away, and every release comes from a known commit, not from
+someone's computer. GitHub Actions runs the workflows in
+`.github/workflows/`, and it is free for public repositories.
 
 `.github/workflows/ci.yml` runs on each push and pull request to `main`. It
 runs the host tests, builds and tests cc65 Release and llvm-mos Release,
@@ -219,32 +185,3 @@ which ROM was released, and the notes of each release give both sizes.
 each push to `main`, with the picocomputer/.github web workflow. Like the
 Latest release, the page is replaced only when `main` is still at that
 commit.
-
-## Starting your own game
-
- * Replace `flappycoo` and `Flappy Coo` with the name of the new game
-   everywhere in `CMakeLists.txt`, `.github/workflows/ci.yml` and the
-   comment above the play link in this README, and change the play link
-   and its screenshot to the new Pages address.
- * Turn on GitHub Pages with Settings > Pages > Source: GitHub Actions,
-   or delete `.github/workflows/web.yml`.
- * Rename `SAVE:flappycoo.hiscore` in `src/main.c`, so the scores of two
-   games are in separate files.
- * Replace `src/help.txt`.
- * Replace the PNGs, then change each png2bin command in `CMakeLists.txt`
-   and the sizes that the Images table lists for that PNG. Fit the
-   `COO_FRAME_` frame numbers and the `COO_HIT_` hitbox in `src/game.h` to
-   the new coo. There must be three rise frames, so `COO_FRAME_DIVE` is
-   `COO_FRAME_RISE + 3`.
-
-## Updating the tools
-
-`tools/` holds the CMake and Python scripts that the SDK runs. Update them
-with the "RP6502: update tools" task (Terminal > Run Task), or with:
-
-```bash
-$ cmake -P tools/rp6502.cmake
-```
-
-A configure downloads the emulator only when `tools/` has none. An update
-replaces it with the latest release. Commit the updated files in `tools/`.
