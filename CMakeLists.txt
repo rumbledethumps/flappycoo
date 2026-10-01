@@ -1,24 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
 
-set(TEST_SOURCES tests/main.c tests/test_game.c src/game.c)
-
-# The unit tests, built with the host C compiler
-if(HOST_TESTS)
-    project(flappycoo C)
-    enable_testing()
-    add_executable(host_tests ${TEST_SOURCES})
-    target_include_directories(host_tests PRIVATE src tests)
-    set_target_properties(host_tests PROPERTIES
-        C_STANDARD 11
-        C_STANDARD_REQUIRED ON
-        C_EXTENSIONS OFF
-    )
-    # Both 6502 compilers make char unsigned.
-    target_compile_options(host_tests PRIVATE -funsigned-char -Wall -Wextra)
-    add_test(NAME host_tests COMMAND host_tests)
-    return()
-endif()
-
 include(${CMAKE_CURRENT_LIST_DIR}/tools/rp6502.cmake)
 
 project(flappycoo C)

@@ -40,27 +40,28 @@ jobs:
           echo "$HOME/.rp6502/llvm-mos/bin" >> "$GITHUB_PATH"
 
       - name: Test the game rules on the host
+        working-directory: tests
         run: |
           set -euo pipefail
           cmake --preset host
           cmake --build --preset host
           ctest --preset host
 
-      # The configure fetches the emulator, which git ignores, because
-      # rp6502_map() runs a program on it.
+      # The configure fetches the emulator that the tests run, which git
+      # ignores.
       - name: Build and test with cc65
         run: |
           set -euo pipefail
           cmake --preset cc65/Release
           cmake --build --preset cc65/Release
-          ctest --preset cc65/Release
+          ctest --test-dir build/cc65/release --output-on-failure
 
       - name: Build and test with llvm-mos
         run: |
           set -euo pipefail
           cmake --preset llvm-mos/Release
           cmake --build --preset llvm-mos/Release
-          ctest --preset llvm-mos/Release
+          ctest --test-dir build/llvm-mos/release --output-on-failure
 
       - name: Pick the smaller ROM
         id: pick
@@ -74,9 +75,8 @@ jobs:
           else
             name="flappycoo-${GITHUB_RUN_ID}"
           fi
-          # The program that rp6502_map() runs while CMake configures is
-          # also a .rp6502 file, so the ROM paths are written in full, not
-          # matched with a wildcard.
+          # The web package holds a second copy of each ROM, so the ROM
+          # paths are written in full, not matched with a wildcard.
           cc65_rom=build/cc65/release/flappycoo.rp6502
           llvm_mos_rom=build/llvm-mos/release/flappycoo.rp6502
           cc65_size=$(stat -c %s "$cc65_rom")

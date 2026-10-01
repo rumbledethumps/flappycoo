@@ -142,21 +142,23 @@ The layout uses 54312 bytes and leaves 11224 free.
 
 The host tests need gcc for your computer. On Windows, install it with
 `winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT` and open a new
-terminal. The `host` preset names gcc, because the llvm-mos `bin` folder
-contains a clang that builds only 6502 programs. Build and run the host
-tests with:
+terminal. The host tests are a separate CMake project in `tests/`. The
+`host` preset in `tests/CMakePresets.json` names gcc, because the llvm-mos
+`bin` folder contains a clang that builds only 6502 programs. Build and run
+the host tests with:
 
 ```bash
+$ cd tests
 $ cmake --preset host
 $ cmake --build --preset host
 $ ctest --preset host
 ```
 
-Each compiler preset has a test preset of the same name, to run after a
-build with that preset:
+The emulator tests run in the build directory of a compiler preset, after
+a build with that preset:
 
 ```bash
-$ ctest --preset llvm-mos/Release
+$ ctest --test-dir build/llvm-mos/release --output-on-failure
 ```
 
 The `tests/*.script` files are emulator scripts. They press keys and

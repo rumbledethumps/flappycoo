@@ -382,9 +382,8 @@ typedef struct
     uint16_t text[2];
 } palettes_t;
 
-// The FPGA reads the colors of paletted sprites through a 1 KB direct-mapped
-// cache, and colors within one 1 KB span of XRAM never evict each other from it.
-_Static_assert(sizeof(palettes_t) <= 1024, "palettes_t is larger than 1 KB.");
+_Static_assert(sizeof(palettes_t) / sizeof(uint16_t) <= 512,
+               "palettes_t holds more than 512 colors.");
 
 typedef struct
 {
