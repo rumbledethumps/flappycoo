@@ -120,7 +120,7 @@ and no address is written twice. See
 | Data, in order | Bytes | Why |
 |---|---|---|
 | PSG | 64 | First, because the PSG must not cross a 256-byte page. |
-| Palettes | 644 | Together, because sprites read colors through a 1 KB direct-mapped cache, and colors within 1 KB of each other never collide in it. |
+| Palettes | 644 | Together, because the FPGA reads the colors of paletted sprites through a 1 KB direct-mapped cache, and colors within 1 KB of each other never collide in it. |
 | Mode configurations and sprites | 192 | |
 | Keyboard, tablet, gamepads | 124 | |
 | Text | 1080 | 40x27 characters. |

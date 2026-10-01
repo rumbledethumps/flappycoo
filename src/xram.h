@@ -341,6 +341,10 @@ typedef struct
     psg_channel_t channel[PSG_CHANNELS];
 } psg_t; /* layout */
 
+/* After the XRAM_ names: PSG_PAGE_CHECK(XRAM_PSG); */
+#define PSG_PAGE_CHECK(addr) \
+    _Static_assert((addr) % 256 + sizeof(psg_t) <= 256, #addr " crosses a page.")
+
 // The HID keycodes that the game reads
 #define HID_KEY_P 0x13
 #define HID_KEY_ENTER 0x28
@@ -378,11 +382,10 @@ typedef struct
     uint16_t text[2];
 } palettes_t;
 
-// Paletted sprites read colors through a 1 KB direct-mapped cache, and colors
-// within one 1 KB span of XRAM never evict each other from it.
-_Static_assert(sizeof(palettes_t) <= 1024, "The palettes do not fit in 1 KB.");
+// The FPGA reads the colors of paletted sprites through a 1 KB direct-mapped
+// cache, and colors within one 1 KB span of XRAM never evict each other from it.
+_Static_assert(sizeof(palettes_t) <= 1024, "palettes_t is larger than 1 KB.");
 
-// The PSG is first, because the 64 PSG bytes must not cross a 256-byte page.
 typedef struct
 {
     psg_t psg;
@@ -432,5 +435,7 @@ typedef struct
 #define XRAM_LOGO offsetof(xram_layout_t, logo)
 #define XRAM_PIPE_BODY offsetof(xram_layout_t, pipe_body)
 #define XRAM_PIPE_CAP offsetof(xram_layout_t, pipe_cap)
+
+PSG_PAGE_CHECK(XRAM_PSG);
 
 #endif
